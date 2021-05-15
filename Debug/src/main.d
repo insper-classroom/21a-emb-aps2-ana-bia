@@ -368,7 +368,7 @@ src/main.d src/main.o: ../src/main.c ../src/asf.h \
  ../src/ASF/thirdparty/lvgl/src/lv_draw/lv_img_decoder.h \
  ../src/ASF/thirdparty/lvgl/src/lv_api_map.h \
  ../src/ASF/thirdparty/lvgl/src/../lvgl.h ../src/touch/touch.h \
- ../src/aps2/aps2.h ../src/aps2/ecg.h ../src/Image.h
+ ../src/aps2/aps2.h ../src/aps2/ecg.h ../src/Image.h ../src/miniLogo.h
 
 ../src/asf.h:
 
@@ -1137,3 +1137,5 @@ c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-no
 ../src/aps2/ecg.h:
 
 ../src/Image.h:
+
+../src/miniLogo.h:

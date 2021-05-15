@@ -10,6 +10,8 @@ src\ASF\sam\drivers\tc\tc.c
 
 src\Image.c
 
+src\miniLogo.c
+
 src\touch\touch.c
 
 src\ASF\common\services\sleepmgr\sam\sleepmgr.c

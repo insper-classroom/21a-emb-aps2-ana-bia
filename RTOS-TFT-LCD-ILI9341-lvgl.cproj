@@ -821,6 +821,12 @@
     <Compile Include="src\Image.h">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="src\miniLogo.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\miniLogo.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="src\touch\touch.c">
       <SubType>compile</SubType>
     </Compile>

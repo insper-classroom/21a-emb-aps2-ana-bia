@@ -6,18 +6,11 @@
  */ 
 
 
-// #ifndef INCFILE1_H_
-// #define INCFILE1_H_
-// 
-// 
-// 
-// 
-// 
-// #endif /* INCFILE1_H_ */
-// 
+#ifndef INCFILE1_H_
+#define INCFILE1_H_
+#endif /* INCFILE1_H_ */
 
 
-#include <stdint.h>
 #include "lvgl.h"
 
 const lv_img_dsc_t Image;
