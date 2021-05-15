@@ -11,6 +11,19 @@
 #include "aps2/aps2.h"
 #include "aps2/ecg.h"
 
+#include "ili9341.h"
+
+typedef struct {
+	const uint16_t *data;
+	uint16_t width;
+	uint16_t height;
+	uint8_t dataSize;
+} tImage;
+
+#include "Image.h"
+
+/** Display background color when clearing the display */
+#define BG_COLOR  ILI9341_COLOR(255, 255, 255)
 /************************************************************************/
 /* STATIC                                                               */
 /************************************************************************/
@@ -161,6 +174,8 @@ int main(void) {
   configure_touch();
   ili9341_backlight_on();
   
+ 
+  
   /*LittlevGL init*/
   lv_init();
   lv_disp_drv_t disp_drv;                 /*A variable to hold the drivers. Can be local variable*/
@@ -196,6 +211,19 @@ int main(void) {
   /* Start the scheduler. */
   vTaskStartScheduler();
 
+
+	/* set x,y pointer on screen */
+	/* set update range  */
+// 	ili9341_set_top_left_limit(0, 0);
+// 	ili9341_set_bottom_right_limit(Image.width, Image.height);
+// 
+// 	/* send pxs to screen */
+// 	ili9341_copy_pixels_to_screen(Image.data, ILI9341_DEFAULT_WIDTH*ILI9341_DEFAULT_HEIGHT);
+	
+	
+	 lv_obj_t * img1 = lv_img_create(lv_scr_act(), NULL);
+	 lv_img_set_src(img1, &Image);
+	 lv_obj_align(img1, NULL, LV_ALIGN_CENTER, 0, -20);
   /* RTOS n?o deve chegar aqui !! */
   while(1){ }
 }
