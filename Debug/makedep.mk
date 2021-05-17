@@ -8,6 +8,12 @@ src\ASF\sam\drivers\dacc\dacc.c
 
 src\ASF\sam\drivers\tc\tc.c
 
+src\dseg30.c
+
+src\dseg50.c
+
+src\dseg70.c
+
 src\Image.c
 
 src\miniLogo.c

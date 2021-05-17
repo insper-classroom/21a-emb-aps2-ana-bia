@@ -16,6 +16,9 @@
 #include "Image.h"
 #include "miniLogo.h"
 
+LV_FONT_DECLARE(dseg30);
+LV_FONT_DECLARE(dseg50);
+LV_FONT_DECLARE(dseg70);
 
 /** Display background color when clearing the display */
 #define BG_COLOR  ILI9341_COLOR(255, 255, 255)
@@ -33,6 +36,16 @@ static  lv_obj_t * labelStart;
 static  lv_obj_t * labelPower;
 static lv_obj_t * spinbox;
 static lv_obj_t * spinbox2;
+static lv_obj_t * labelBat;
+static lv_obj_t * labelTempo;
+static lv_obj_t * labelOx;
+static lv_obj_t * labelOxUni;
+static lv_obj_t * labelOxNum;
+static lv_obj_t * labelBa;
+static lv_obj_t * labelBaUni;
+static lv_obj_t * labelBaNum;
+
+
 
 /************************************************************************/
 /* RTOS                                                                 */
@@ -257,6 +270,80 @@ void lv_principal(void){
 	labelPower = lv_label_create(btnPower, NULL);
 	lv_label_set_recolor(labelPower, true);
 	lv_label_set_text(labelPower, "#ffffff  " LV_SYMBOL_POWER " ");
+	
+	//-------------------
+	// Bateria
+	//-------------------
+
+	lv_obj_t * labelBat = lv_label_create(lv_scr_act(), NULL);
+	lv_label_set_long_mode(labelBat, LV_LABEL_LONG_BREAK);
+	lv_label_set_recolor(labelBat, true);
+	lv_obj_align(labelBat, NULL, LV_ALIGN_IN_TOP_RIGHT, -80, 25);
+	lv_label_set_text(labelBat, "#2D9613  " LV_SYMBOL_BATTERY_3 " 76% ");
+	lv_obj_set_width(labelBat, 150);
+	
+	//-------------------
+	//Hora e minuto
+	//-------------------
+	
+	lv_obj_t * labelTempo = lv_label_create(lv_scr_act(), NULL);
+	lv_label_set_long_mode(labelTempo, LV_LABEL_LONG_BREAK);
+	lv_label_set_recolor(labelTempo, true);
+	lv_obj_align(labelTempo, NULL, LV_ALIGN_IN_TOP_MID, 0, 25);
+	lv_label_set_text(labelTempo, "#000000 17:04");
+	lv_obj_set_width(labelTempo, 150);
+	
+	//-------------------
+	//Oxigenio
+	//-------------------
+	
+	lv_obj_t * labelOx = lv_label_create(lv_scr_act(), NULL);
+	lv_label_set_long_mode(labelOx, LV_LABEL_LONG_BREAK);
+	lv_label_set_recolor(labelOx, true);
+	lv_obj_align(labelOx, NULL, LV_ALIGN_IN_LEFT_MID, 40, -50);
+	lv_label_set_text(labelOx, "#000000 OXIGENIO");
+	lv_obj_set_width(labelOx, 150);
+	
+	
+	lv_obj_t * labelOxNum = lv_label_create(lv_scr_act(), NULL);
+	lv_obj_align(labelOxNum, NULL, LV_ALIGN_IN_LEFT_MID, 40 , -28);
+	lv_obj_set_style_local_text_font(labelOxNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, &dseg30);
+	lv_obj_set_style_local_text_color(labelOxNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_MAGENTA);
+	lv_label_set_text_fmt(labelOxNum, "97");
+	
+	lv_obj_t * labelOxUni = lv_label_create(lv_scr_act(), NULL);
+	lv_label_set_long_mode(labelOxUni, LV_LABEL_LONG_BREAK);
+	lv_label_set_recolor(labelOxUni, true);
+	lv_obj_align(labelOxUni, NULL, LV_ALIGN_IN_LEFT_MID, 97, -13);
+	lv_label_set_text(labelOxUni, "#CA1041 SpO2%");
+	lv_obj_set_width(labelOxUni, 150);
+	
+	//-------------------
+	// Batimentos
+	//-------------------
+	
+	lv_obj_t * labelBa = lv_label_create(lv_scr_act(), NULL);
+	lv_label_set_long_mode(labelBa, LV_LABEL_LONG_BREAK);
+	lv_label_set_recolor(labelBa, true);
+	lv_obj_align(labelBa, NULL, LV_ALIGN_IN_LEFT_MID, 40, 20);
+	lv_label_set_text(labelBa, "#000000 BATIMENTOS");
+	lv_obj_set_width(labelBa, 150);
+	
+	
+	lv_obj_t * labelBaNum = lv_label_create(lv_scr_act(), NULL);
+	lv_obj_align(labelBaNum, NULL, LV_ALIGN_IN_LEFT_MID, 28 , 42);
+	lv_obj_set_style_local_text_font(labelBaNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, &dseg30);
+	lv_obj_set_style_local_text_color(labelBaNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_GREEN);
+	lv_label_set_text_fmt(labelBaNum, "170");
+	
+	lv_obj_t *labelBaUni = lv_label_create(lv_scr_act(), NULL);
+	lv_label_set_long_mode(labelBaUni, LV_LABEL_LONG_BREAK);
+	lv_label_set_recolor(labelBaUni, true);
+	lv_obj_align(labelBaUni, NULL, LV_ALIGN_IN_LEFT_MID, 105, 60);
+	lv_label_set_text(labelBaUni, "#2D9613 BPM");
+	lv_obj_set_width(labelBaUni, 150);
+	
+	
 }
 
 /************************************************************************/
