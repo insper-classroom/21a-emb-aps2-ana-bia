@@ -22,6 +22,10 @@ LV_FONT_DECLARE(dseg70);
 
 /** Display background color when clearing the display */
 #define BG_COLOR  ILI9341_COLOR(255, 255, 255)
+
+#define AFEC_POT AFEC1
+#define AFEC_POT_ID ID_AFEC1
+#define AFEC_POT_CHANNEL 6
 /************************************************************************/
 /* STATIC                                                               */
 /************************************************************************/
@@ -46,7 +50,17 @@ static lv_obj_t * labelBaUni;
 static lv_obj_t * labelBaNum;
 
 
+volatile bool g_is_conversion_done = false;
+/** The conversion data value */
+volatile uint32_t g_ul_value = 0;
 
+
+typedef struct {
+	uint value;
+} ecgData;
+
+
+QueueHandle_t xQueueECG;
 /************************************************************************/
 /* RTOS                                                                 */
 /************************************************************************/
@@ -70,7 +84,116 @@ extern void vApplicationIdleHook(void) { }
 extern void vApplicationTickHook(void) { }
 
 extern void vApplicationMallocFailedHook(void) {  configASSERT( ( volatile void * ) NULL ); }
+	
+	
+	
+/************************************************************************/
+/* AFEC                                                                 */
+/************************************************************************/
 
+static void AFEC_pot_Callback(void){
+	g_ul_value = afec_channel_get_value(AFEC_POT, AFEC_POT_CHANNEL);
+	g_is_conversion_done = true;
+	ecgData ecg;
+	ecg.value=g_ul_value;
+	xQueueSendFromISR(xQueueECG,&ecg,0);
+}
+
+static void config_AFEC_pot(Afec *afec, uint32_t afec_id, uint32_t afec_channel, afec_callback_t callback){
+	/*************************************
+	* Ativa e configura AFEC
+	*************************************/
+	/* Ativa AFEC - 0 */
+	afec_enable(afec);
+
+	/* struct de configuracao do AFEC */
+	struct afec_config afec_cfg;
+
+	/* Carrega parametros padrao */
+	afec_get_config_defaults(&afec_cfg);
+
+	/* Configura AFEC */
+	afec_init(afec, &afec_cfg);
+
+	/* Configura trigger por software */
+	afec_set_trigger(afec, AFEC_TRIG_SW);
+
+	/*** Configuracao específica do canal AFEC ***/
+	struct afec_ch_config afec_ch_cfg;
+	afec_ch_get_config_defaults(&afec_ch_cfg);
+	afec_ch_cfg.gain = AFEC_GAINVALUE_0;
+	afec_ch_set_config(afec, afec_channel, &afec_ch_cfg);
+
+	/*
+	* Calibracao:
+	* Because the internal ADC offset is 0x200, it should cancel it and shift
+	down to 0.
+	*/
+	afec_channel_set_analog_offset(afec, afec_channel, 0x200);
+
+	/***  Configura sensor de temperatura ***/
+	struct afec_temp_sensor_config afec_temp_sensor_cfg;
+
+	afec_temp_sensor_get_config_defaults(&afec_temp_sensor_cfg);
+	afec_temp_sensor_set_config(afec, &afec_temp_sensor_cfg);
+	
+	/* configura IRQ */
+	afec_set_callback(afec, afec_channel,	callback, 1);
+	NVIC_SetPriority(afec_id, 4);
+	NVIC_EnableIRQ(afec_id);
+}
+	
+	
+/************************************************************************/
+/* TC                                                                   */
+/************************************************************************/
+
+void TC3_Handler(void){
+	volatile uint32_t ul_dummy;
+
+	/****************************************************************
+	* Devemos indicar ao TC que a interrupção foi satisfeita.
+	******************************************************************/
+	ul_dummy = tc_get_status(TC1, 0);
+
+	/* Avoid compiler warning */
+	UNUSED(ul_dummy);
+	
+	afec_channel_enable(AFEC_POT, AFEC_POT_CHANNEL);
+	afec_start_software_conversion(AFEC_POT);
+
+	/** Muda o estado do LED */
+	
+}
+
+void TC_init(Tc * TC, int ID_TC, int TC_CHANNEL, int freq){
+	uint32_t ul_div;
+	uint32_t ul_tcclks;
+	uint32_t ul_sysclk = sysclk_get_cpu_hz();
+
+	/* Configura o PMC */
+	/* O TimerCounter é meio confuso
+	o uC possui 3 TCs, cada TC possui 3 canais
+	TC0 : ID_TC0, ID_TC1, ID_TC2
+	TC1 : ID_TC3, ID_TC4, ID_TC5
+	TC2 : ID_TC6, ID_TC7, ID_TC8
+	*/
+	pmc_enable_periph_clk(ID_TC);
+
+	/** Configura o TC para operar em  freq hz e interrupçcão no RC compare */
+	tc_find_mck_divisor(freq, ul_sysclk, &ul_div, &ul_tcclks, ul_sysclk);
+	tc_init(TC, TC_CHANNEL, ul_tcclks | TC_CMR_CPCTRG);
+	tc_write_rc(TC, TC_CHANNEL, (ul_sysclk / ul_div) / freq);
+
+	/* Configura e ativa interrupçcão no TC canal 0 */
+	/* Interrupção no C */
+	NVIC_SetPriority(ID_TC, 4);
+	NVIC_EnableIRQ((IRQn_Type) ID_TC);
+	tc_enable_interrupt(TC, TC_CHANNEL, TC_IER_CPCS);
+
+	/* Inicializa o canal 0 do TC */
+	tc_start(TC, TC_CHANNEL);
+}
 /************************************************************************/
 /* HANDLERS E EVENTS                                                               */
 /************************************************************************/
@@ -309,7 +432,7 @@ void lv_principal(void){
 	lv_obj_align(labelOxNum, NULL, LV_ALIGN_IN_LEFT_MID, 40 , -28);
 	lv_obj_set_style_local_text_font(labelOxNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, &dseg30);
 	lv_obj_set_style_local_text_color(labelOxNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_MAGENTA);
-	lv_label_set_text_fmt(labelOxNum, "97");
+	//lv_label_set_text_fmt(labelOxNum, "97");
 	
 	lv_obj_t * labelOxUni = lv_label_create(lv_scr_act(), NULL);
 	lv_label_set_long_mode(labelOxUni, LV_LABEL_LONG_BREAK);
@@ -371,10 +494,30 @@ static void task_main(void *pvParameters) {
     
     if ( xQueueReceive( xQueueOx, &ox, 0 )) {
       printf("ox: %d \n", ox);
+	  lv_label_set_text_fmt(labelOxNum, "%d",ox);
     }
-         
+	
+	 printf("ox sem fila: %d \n", ox);
+ 
     vTaskDelay(25);
   }
+}
+
+static void task_process(void *pvParameters) {
+	
+	TC_init(TC1, ID_TC3, 0, 250);
+	xQueueECG = xQueueCreate(250, sizeof(int));
+	ecgData ecg;
+	config_AFEC_pot(AFEC_POT, AFEC_POT_ID, AFEC_POT_CHANNEL, AFEC_pot_Callback);
+	if (xQueueECG == NULL){
+		printf("falha em criar a fila \n");
+	}
+	while(1){
+		if (xQueueReceive( xQueueECG, &(ecg), ( TickType_t ) 10/ portTICK_PERIOD_MS)) {
+			printf("%d \n", ecg.value);
+		}
+		
+	}
 }
 
 /************************************************************************/
@@ -483,7 +626,12 @@ int main(void) {
   if (xTaskCreate(task_main, "main", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_PRIORITY, NULL) != pdPASS) {
     printf("Failed to create Main task\r\n");
   }
-//   
+  
+
+  if (xTaskCreate(task_process, "process", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_PRIORITY, NULL) != pdPASS) {
+	  printf("Failed to create process task\r\n");
+  }
+   
   /* Start the scheduler. */
   vTaskStartScheduler();
 
