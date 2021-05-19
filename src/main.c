@@ -26,6 +26,7 @@ LV_FONT_DECLARE(dseg70);
 #define AFEC_POT AFEC1
 #define AFEC_POT_ID ID_AFEC1
 #define AFEC_POT_CHANNEL 6
+#define CHAR_DATA_LEN 250
 /************************************************************************/
 /* STATIC                                                               */
 /************************************************************************/
@@ -48,18 +49,28 @@ static lv_obj_t * labelOxNum;
 static lv_obj_t * labelBa;
 static lv_obj_t * labelBaUni;
 static lv_obj_t * labelBaNum;
+static  lv_obj_t * labelFloor;
+static  lv_obj_t * labelBPM;
 
 
 volatile bool g_is_conversion_done = false;
 /** The conversion data value */
 volatile uint32_t g_ul_value = 0;
 
+int ser1_data[CHAR_DATA_LEN];
+lv_obj_t * chart;
+lv_chart_series_t * ser1;
 
 typedef struct {
 	uint value;
 } ecgData;
 
+typedef struct {
+	int ecg;
+	int bpm;
+} ecgInfo;
 
+QueueHandle_t xQueueEcgInfo;
 QueueHandle_t xQueueECG;
 /************************************************************************/
 /* RTOS                                                                 */
@@ -423,13 +434,13 @@ void lv_principal(void){
 	lv_obj_t * labelOx = lv_label_create(lv_scr_act(), NULL);
 	lv_label_set_long_mode(labelOx, LV_LABEL_LONG_BREAK);
 	lv_label_set_recolor(labelOx, true);
-	lv_obj_align(labelOx, NULL, LV_ALIGN_IN_LEFT_MID, 40, -50);
+	lv_obj_align(labelOx, NULL, LV_ALIGN_IN_LEFT_MID, 40, 20);
 	lv_label_set_text(labelOx, "#000000 OXIGENIO");
 	lv_obj_set_width(labelOx, 150);
 	
 	
 	lv_obj_t * labelOxNum = lv_label_create(lv_scr_act(), NULL);
-	lv_obj_align(labelOxNum, NULL, LV_ALIGN_IN_LEFT_MID, 40 , -28);
+	lv_obj_align(labelOxNum, NULL, LV_ALIGN_IN_LEFT_MID, 28 , 42);
 	lv_obj_set_style_local_text_font(labelOxNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, &dseg30);
 	lv_obj_set_style_local_text_color(labelOxNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_MAGENTA);
 	//lv_label_set_text_fmt(labelOxNum, "97");
@@ -437,7 +448,7 @@ void lv_principal(void){
 	lv_obj_t * labelOxUni = lv_label_create(lv_scr_act(), NULL);
 	lv_label_set_long_mode(labelOxUni, LV_LABEL_LONG_BREAK);
 	lv_label_set_recolor(labelOxUni, true);
-	lv_obj_align(labelOxUni, NULL, LV_ALIGN_IN_LEFT_MID, 97, -13);
+	lv_obj_align(labelOxUni, NULL, LV_ALIGN_IN_LEFT_MID, 105, 60);
 	lv_label_set_text(labelOxUni, "#CA1041 SpO2%");
 	lv_obj_set_width(labelOxUni, 150);
 	
@@ -448,13 +459,13 @@ void lv_principal(void){
 	lv_obj_t * labelBa = lv_label_create(lv_scr_act(), NULL);
 	lv_label_set_long_mode(labelBa, LV_LABEL_LONG_BREAK);
 	lv_label_set_recolor(labelBa, true);
-	lv_obj_align(labelBa, NULL, LV_ALIGN_IN_LEFT_MID, 40, 20);
+	lv_obj_align(labelBa, NULL, LV_ALIGN_IN_LEFT_MID, 40, -50);
 	lv_label_set_text(labelBa, "#000000 BATIMENTOS");
 	lv_obj_set_width(labelBa, 150);
 	
 	
 	lv_obj_t * labelBaNum = lv_label_create(lv_scr_act(), NULL);
-	lv_obj_align(labelBaNum, NULL, LV_ALIGN_IN_LEFT_MID, 28 , 42);
+	lv_obj_align(labelBaNum, NULL, LV_ALIGN_IN_LEFT_MID, 20 , -28);
 	lv_obj_set_style_local_text_font(labelBaNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, &dseg30);
 	lv_obj_set_style_local_text_color(labelBaNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_GREEN);
 	lv_label_set_text_fmt(labelBaNum, "170");
@@ -462,11 +473,40 @@ void lv_principal(void){
 	lv_obj_t *labelBaUni = lv_label_create(lv_scr_act(), NULL);
 	lv_label_set_long_mode(labelBaUni, LV_LABEL_LONG_BREAK);
 	lv_label_set_recolor(labelBaUni, true);
-	lv_obj_align(labelBaUni, NULL, LV_ALIGN_IN_LEFT_MID, 105, 60);
+	lv_obj_align(labelBaUni, NULL, LV_ALIGN_IN_LEFT_MID, 97, -13);
 	lv_label_set_text(labelBaUni, "#2D9613 BPM");
 	lv_obj_set_width(labelBaUni, 150);
 	
 	
+}
+
+void lv_screen_chart(void) {
+	chart = lv_chart_create(lv_scr_act(), NULL);
+	lv_obj_set_size(chart, 110, 40);
+	lv_obj_align(chart, NULL, LV_ALIGN_IN_TOP_MID, 45, 80);
+	lv_chart_set_type(chart, LV_CHART_TYPE_LINE);
+	lv_chart_set_range(chart, 0, 4095);
+	lv_chart_set_point_count(chart, CHAR_DATA_LEN);
+	lv_chart_set_div_line_count(chart, 0, 0);
+	lv_chart_set_update_mode(chart, LV_CHART_UPDATE_MODE_SHIFT);
+	
+	lv_obj_set_style_local_bg_opa(chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, LV_OPA_50); 
+	lv_obj_set_style_local_bg_grad_dir(chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, LV_GRAD_DIR_VER);
+	lv_obj_set_style_local_bg_main_stop(chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, 255);    
+	lv_obj_set_style_local_bg_grad_stop(chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, 0);   
+	   
+	ser1 = lv_chart_add_series(chart, LV_COLOR_GREEN);
+	lv_chart_set_ext_array(chart, ser1, ser1_data, CHAR_DATA_LEN);
+	lv_obj_set_style_local_line_width(chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, 1);
+	
+	labelFloor = lv_label_create(lv_scr_act(), NULL);
+	lv_obj_align(labelFloor, NULL, LV_ALIGN_IN_TOP_LEFT, -5 , 0);
+	lv_obj_set_style_local_text_font(labelFloor, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, &dseg70);
+	lv_obj_set_style_local_text_color(labelFloor, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_GREEN);
+// 	
+// 	labelBPM = lv_label_create(lv_scr_act(), NULL);
+// 	lv_obj_align(labelBPM, NULL, LV_ALIGN_IN_TOP_MID, 0 , 0);
+// 	lv_obj_set_style_local_text_color(labelBPM, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_BLACK);
 }
 
 /************************************************************************/
@@ -479,6 +519,7 @@ static void task_lcd(void *pvParameters) {
 	LV_IMG_DECLARE(miniLogo);
 	//lv_inicio();
 	lv_principal();
+	lv_screen_chart();
 	
   for (;;)  {
     lv_tick_inc(50);
@@ -490,12 +531,26 @@ static void task_lcd(void *pvParameters) {
 static void task_main(void *pvParameters) {
 
    char ox;
+   ecgInfo ecg;
    for (;;)  {
     
-    if ( xQueueReceive( xQueueOx, &ox, 0 )) {
-      printf("ox: %d \n", ox);
-	  lv_label_set_text_fmt(labelOxNum, "%d",ox);
-    }
+  //  if ( xQueueReceive( xQueueOx, &ox, 0 )) {
+//       printf("ox: %d \n", ox);
+// 	  lv_label_set_text_fmt(labelOxNum, "%d",ox);   
+//	 }
+	  
+	  if (xQueueReceive( xQueueEcgInfo, &(ecg), ( TickType_t )  100 / portTICK_PERIOD_MS)) {
+		  printf("%d\n", ecg.ecg);
+		  
+// 		  if(ecg.bpm > 0) {
+// 			  lv_label_set_text_fmt(labelFloor, "%02d", ecg.bpm);
+// 			  lv_label_set_text_fmt(labelBPM, "BPM");
+// 		  }
+		  
+		  lv_chart_set_next(chart, ser1, ecg.ecg);
+		  lv_chart_refresh(chart);
+		  lv_obj_set_style_local_size(chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, LV_DPI/150);
+	  }
 	
 	 printf("ox sem fila: %d \n", ox);
  
@@ -508,13 +563,19 @@ static void task_process(void *pvParameters) {
 	TC_init(TC1, ID_TC3, 0, 250);
 	xQueueECG = xQueueCreate(250, sizeof(int));
 	ecgData ecg;
+	ecgInfo ecgi;
+	int bpm;
 	config_AFEC_pot(AFEC_POT, AFEC_POT_ID, AFEC_POT_CHANNEL, AFEC_pot_Callback);
 	if (xQueueECG == NULL){
 		printf("falha em criar a fila \n");
 	}
 	while(1){
 		if (xQueueReceive( xQueueECG, &(ecg), ( TickType_t ) 10/ portTICK_PERIOD_MS)) {
-			printf("%d \n", ecg.value);
+			//printf("%d \n", ecg.value);
+			ecgi.ecg = ecg.value;
+			//printf("teste %d", ecgi.ecg);
+			ecgi.bpm = bpm;
+			xQueueSend(xQueueEcgInfo,&ecgi,0);
 		}
 		
 	}
@@ -614,6 +675,7 @@ int main(void) {
   lv_indev_t * my_indev = lv_indev_drv_register(&indev_drv);
   
   xQueueOx = xQueueCreate(32, sizeof(char));
+  xQueueEcgInfo = xQueueCreate(32, sizeof(ecgInfo));
 
   if (xTaskCreate(task_lcd, "LCD", TASK_LCD_STACK_SIZE, NULL, TASK_LCD_PRIORITY, NULL) != pdPASS) {
     printf("Failed to create lcd task\r\n");
