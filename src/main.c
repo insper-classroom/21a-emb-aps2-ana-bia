@@ -31,6 +31,16 @@ LV_FONT_DECLARE(dseg70);
 /* STATIC                                                               */
 /************************************************************************/
 
+typedef struct  {
+	uint32_t year;
+	uint32_t month;
+	uint32_t day;
+	uint32_t week;
+	uint32_t hour;
+	uint32_t minute;
+	uint32_t second;
+} calendar;
+
 /*A static or global variable to store the buffers*/
 static lv_disp_buf_t disp_buf;
 
@@ -51,11 +61,17 @@ static lv_obj_t * labelBaUni;
 static lv_obj_t * labelBaNum;
 static  lv_obj_t * labelFloor;
 static  lv_obj_t * labelBPM;
+static  lv_obj_t * labelDot;
+lv_obj_t * mbox1;
 
+volatile char flag_rtc=0;
+volatile char flag_dot = 0;
 
 volatile bool g_is_conversion_done = false;
 /** The conversion data value */
 volatile uint32_t g_ul_value = 0;
+volatile int entrou=0;
+volatile int g_dT=0;
 
 int ser1_data[CHAR_DATA_LEN];
 lv_obj_t * chart;
@@ -72,6 +88,8 @@ typedef struct {
 
 QueueHandle_t xQueueEcgInfo;
 QueueHandle_t xQueueECG;
+
+SemaphoreHandle_t xSemaphore;
 /************************************************************************/
 /* RTOS                                                                 */
 /************************************************************************/
@@ -86,8 +104,8 @@ QueueHandle_t xQueueECG;
 #define TASK_MAIN_PRIORITY           (tskIDLE_PRIORITY)
 
 extern void vApplicationStackOverflowHook(xTaskHandle *pxTask, signed char *pcTaskName) {
-  printf("stack overflow %x %s\r\n", pxTask, (portCHAR *)pcTaskName);
-  for (;;) {	}
+	printf("stack overflow %x %s\r\n", pxTask, (portCHAR *)pcTaskName);
+	for (;;) {	}
 }
 
 extern void vApplicationIdleHook(void) { }
@@ -95,9 +113,9 @@ extern void vApplicationIdleHook(void) { }
 extern void vApplicationTickHook(void) { }
 
 extern void vApplicationMallocFailedHook(void) {  configASSERT( ( volatile void * ) NULL ); }
-	
-	
-	
+
+
+
 /************************************************************************/
 /* AFEC                                                                 */
 /************************************************************************/
@@ -153,8 +171,8 @@ static void config_AFEC_pot(Afec *afec, uint32_t afec_id, uint32_t afec_channel,
 	NVIC_SetPriority(afec_id, 4);
 	NVIC_EnableIRQ(afec_id);
 }
-	
-	
+
+
 /************************************************************************/
 /* TC                                                                   */
 /************************************************************************/
@@ -205,6 +223,119 @@ void TC_init(Tc * TC, int ID_TC, int TC_CHANNEL, int freq){
 	/* Inicializa o canal 0 do TC */
 	tc_start(TC, TC_CHANNEL);
 }
+
+
+/************************************************************************/
+/* RTT                                                                   */
+/************************************************************************/
+
+void RTT_Handler(void)
+{
+	uint32_t ul_status;
+
+	/* Get RTT status - ACK */
+	ul_status = rtt_get_status(RTT);
+
+	/* IRQ due to Time has changed */
+	if ((ul_status & RTT_SR_RTTINC) == RTT_SR_RTTINC) {
+		g_dT++;
+		//f_rtt_alarme = false;
+		
+		//	pin_toggle(LED2_PIO, LED2_IDX_MASK);    // BLINK Led
+		
+	}
+
+	/* IRQ due to Alarm */
+	if ((ul_status & RTT_SR_ALMS) == RTT_SR_ALMS) {
+		
+		// pin_toggle(LED_PIO, LED_IDX_MASK);    // BLINK Led
+		//	f_rtt_alarme = true;                  // flag RTT alarme
+	}
+}
+
+static float get_time_rtt(){
+	uint ul_previous_time = rtt_read_timer_value(RTT);
+}
+
+static void RTT_init(uint16_t pllPreScale, uint32_t IrqNPulses)
+{
+	uint32_t ul_previous_time;
+
+	/* Configure RTT for a 1 second tick interrupt */
+	rtt_sel_source(RTT, false);
+	rtt_init(RTT, pllPreScale);
+	
+	ul_previous_time = rtt_read_timer_value(RTT);
+	while (ul_previous_time == rtt_read_timer_value(RTT));
+	
+	rtt_write_alarm_time(RTT, IrqNPulses+ul_previous_time);
+
+	/* Enable RTT interrupt */
+	NVIC_DisableIRQ(RTT_IRQn);
+	NVIC_ClearPendingIRQ(RTT_IRQn);
+	NVIC_SetPriority(RTT_IRQn, 4);
+	NVIC_EnableIRQ(RTT_IRQn);
+	rtt_enable_interrupt(RTT, RTT_MR_ALMIEN | RTT_MR_RTTINCIEN);
+}
+
+
+/************************************************************************/
+/* RTC                                                                   */
+/************************************************************************/
+void RTC_Handler(void)
+{
+	uint32_t ul_status = rtc_get_status(RTC);
+
+
+	
+	/* Time or date alarm */
+	if ((ul_status & RTC_SR_ALARM) == RTC_SR_ALARM) {
+		
+	}
+	
+
+	if ((ul_status & RTC_SR_SEC) == RTC_SR_SEC) {
+		
+		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+		xSemaphoreGiveFromISR(xSemaphore, &xHigherPriorityTaskWoken);
+		//rtc_clear_status(RTC, RTC_SCCR_SECCLR);
+	}
+	
+	rtc_clear_status(RTC, RTC_SCCR_SECCLR);
+	rtc_clear_status(RTC, RTC_SCCR_ALRCLR);
+	rtc_clear_status(RTC, RTC_SCCR_ACKCLR);
+	rtc_clear_status(RTC, RTC_SCCR_TIMCLR);
+	rtc_clear_status(RTC, RTC_SCCR_CALCLR);
+	rtc_clear_status(RTC, RTC_SCCR_TDERRCLR);
+}
+
+
+void RTC_init(Rtc *rtc, uint32_t id_rtc, calendar t, uint32_t irq_type){
+	/* Configura o PMC */
+	pmc_enable_periph_clk(ID_RTC);
+
+	/* Default RTC configuration, 24-hour mode */
+	rtc_set_hour_mode(rtc, 0);
+
+	/* Configura data e hora manualmente */
+	rtc_set_date(rtc, t.year, t.month, t.day, t.week);
+	rtc_set_time(rtc, t.hour, t.minute, t.second);
+
+	/* Configure RTC interrupts */
+	NVIC_DisableIRQ(id_rtc);
+	NVIC_ClearPendingIRQ(id_rtc);
+	NVIC_SetPriority(id_rtc, 4);
+	NVIC_EnableIRQ(id_rtc);
+
+	/* Ativa interrupcao via alarme */
+	rtc_enable_interrupt(rtc,  irq_type);
+}
+
+
+
+
+
+
 /************************************************************************/
 /* HANDLERS E EVENTS                                                               */
 /************************************************************************/
@@ -255,12 +386,22 @@ static void lv_spinbox_decrement_event_cb2(lv_obj_t * btn, lv_event_t e)
 	}
 }
 
+
+
+void toggleDot(void)
+{
+	if(flag_dot == 1){ flag_dot = 0; lv_label_set_text_fmt(labelDot, "#",17,15);}
+	else { flag_dot = 1; lv_label_set_text_fmt(labelDot, ":",17,15); }
+}
+
+
 /************************************************************************/
 /* ASP2 - NAO MEXER!                                                    */
 /************************************************************************/
 
 QueueHandle_t xQueueOx;
 TimerHandle_t xTimer;
+
 volatile int g_ecgCnt = 0;
 volatile int g_ecgDelayCnt = 0;
 volatile int g_ecgDelayValue = 0;
@@ -420,12 +561,20 @@ void lv_principal(void){
 	//Hora e minuto
 	//-------------------
 	
-	lv_obj_t * labelTempo = lv_label_create(lv_scr_act(), NULL);
+	labelTempo = lv_label_create(lv_scr_act(), NULL);
 	lv_label_set_long_mode(labelTempo, LV_LABEL_LONG_BREAK);
 	lv_label_set_recolor(labelTempo, true);
 	lv_obj_align(labelTempo, NULL, LV_ALIGN_IN_TOP_MID, 0, 25);
-	lv_label_set_text(labelTempo, "#000000 17:04");
+	//lv_label_set_text(labelTempo, "#000000 17:04");
 	lv_obj_set_width(labelTempo, 150);
+	
+	
+	 labelDot = lv_label_create(lv_scr_act(), NULL);
+	lv_label_set_long_mode(  labelDot, LV_LABEL_LONG_BREAK);
+	lv_label_set_recolor(  labelDot, true);
+	lv_obj_align( labelDot, NULL, LV_ALIGN_IN_TOP_MID, 14, 25);
+	lv_label_set_text( labelDot, "#000000 : ");
+	lv_obj_set_width( labelDot, 150);
 	
 	//-------------------
 	//Oxigenio
@@ -439,8 +588,8 @@ void lv_principal(void){
 	lv_obj_set_width(labelOx, 150);
 	
 	
-	lv_obj_t * labelOxNum = lv_label_create(lv_scr_act(), NULL);
-	lv_obj_align(labelOxNum, NULL, LV_ALIGN_IN_LEFT_MID, 28 , 42);
+	labelOxNum = lv_label_create(lv_scr_act(), NULL);
+	lv_obj_align(labelOxNum, NULL, LV_ALIGN_IN_LEFT_MID, 40 , 42);
 	lv_obj_set_style_local_text_font(labelOxNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, &dseg30);
 	lv_obj_set_style_local_text_color(labelOxNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_MAGENTA);
 	//lv_label_set_text_fmt(labelOxNum, "97");
@@ -464,11 +613,11 @@ void lv_principal(void){
 	lv_obj_set_width(labelBa, 150);
 	
 	
-	lv_obj_t * labelBaNum = lv_label_create(lv_scr_act(), NULL);
-	lv_obj_align(labelBaNum, NULL, LV_ALIGN_IN_LEFT_MID, 20 , -28);
+	labelBaNum = lv_label_create(lv_scr_act(), NULL);
+	lv_obj_align(labelBaNum, NULL, LV_ALIGN_IN_LEFT_MID, 40 , -28);
 	lv_obj_set_style_local_text_font(labelBaNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, &dseg30);
 	lv_obj_set_style_local_text_color(labelBaNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_GREEN);
-	lv_label_set_text_fmt(labelBaNum, "170");
+	/*lv_label_set_text_fmt(labelBaNum, "170");*/
 	
 	lv_obj_t *labelBaUni = lv_label_create(lv_scr_act(), NULL);
 	lv_label_set_long_mode(labelBaUni, LV_LABEL_LONG_BREAK);
@@ -480,6 +629,8 @@ void lv_principal(void){
 	
 }
 
+
+
 void lv_screen_chart(void) {
 	chart = lv_chart_create(lv_scr_act(), NULL);
 	lv_obj_set_size(chart, 110, 40);
@@ -490,11 +641,11 @@ void lv_screen_chart(void) {
 	lv_chart_set_div_line_count(chart, 0, 0);
 	lv_chart_set_update_mode(chart, LV_CHART_UPDATE_MODE_SHIFT);
 	
-	lv_obj_set_style_local_bg_opa(chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, LV_OPA_50); 
+	lv_obj_set_style_local_bg_opa(chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, LV_OPA_50);
 	lv_obj_set_style_local_bg_grad_dir(chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, LV_GRAD_DIR_VER);
-	lv_obj_set_style_local_bg_main_stop(chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, 255);    
-	lv_obj_set_style_local_bg_grad_stop(chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, 0);   
-	   
+	lv_obj_set_style_local_bg_main_stop(chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, 255);
+	lv_obj_set_style_local_bg_grad_stop(chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, 0);
+	
 	ser1 = lv_chart_add_series(chart, LV_COLOR_GREEN);
 	lv_chart_set_ext_array(chart, ser1, ser1_data, CHAR_DATA_LEN);
 	lv_obj_set_style_local_line_width(chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, 1);
@@ -503,15 +654,32 @@ void lv_screen_chart(void) {
 	lv_obj_align(labelFloor, NULL, LV_ALIGN_IN_TOP_LEFT, -5 , 0);
 	lv_obj_set_style_local_text_font(labelFloor, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, &dseg70);
 	lv_obj_set_style_local_text_color(labelFloor, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_GREEN);
-// 	
-// 	labelBPM = lv_label_create(lv_scr_act(), NULL);
-// 	lv_obj_align(labelBPM, NULL, LV_ALIGN_IN_TOP_MID, 0 , 0);
-// 	lv_obj_set_style_local_text_color(labelBPM, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_BLACK);
+	//
+	// 	labelBPM = lv_label_create(lv_scr_act(), NULL);
+	// 	lv_obj_align(labelBPM, NULL, LV_ALIGN_IN_TOP_MID, 0 , 0);
+	// 	lv_obj_set_style_local_text_color(labelBPM, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_BLACK);
 }
+
+
+
+void lv_alarme(void)
+{
+	//static const char * btns[] ={"OK", ""};
+
+	mbox1 = lv_msgbox_create(lv_scr_act(), NULL);
+	lv_msgbox_set_text(mbox1, "Cuidado! Sua oxigenacao esta abaixo de 90.");
+	//lv_msgbox_add_btns(mbox1, btns);
+	lv_obj_set_width(mbox1, 200);
+	//lv_obj_set_event_cb(mbox1, event_handler_alarm);
+	lv_obj_align(mbox1, NULL, LV_ALIGN_CENTER, 0, 0); /*Align to the corner*/
+}
+
+
 
 /************************************************************************/
 /* TASKS                                                                */
-/************************************************************************/
+/**
+**********************************************************************/
 
 static void task_lcd(void *pvParameters) {
 	
@@ -520,42 +688,60 @@ static void task_lcd(void *pvParameters) {
 	//lv_inicio();
 	lv_principal();
 	lv_screen_chart();
+	//lv_alarme();
 	
-  for (;;)  {
-    lv_tick_inc(50);
-    lv_task_handler();
-    vTaskDelay(50);
-  }
+	for (;;)  {
+		lv_tick_inc(50);
+		lv_task_handler();
+		vTaskDelay(50);
+	}
 }
 
 static void task_main(void *pvParameters) {
 
-   char ox;
-   ecgInfo ecg;
-   for (;;)  {
-    
-  //  if ( xQueueReceive( xQueueOx, &ox, 0 )) {
-//       printf("ox: %d \n", ox);
-// 	  lv_label_set_text_fmt(labelOxNum, "%d",ox);   
-//	 }
-	  
-	  if (xQueueReceive( xQueueEcgInfo, &(ecg), ( TickType_t )  100 / portTICK_PERIOD_MS)) {
-		  printf("%d\n", ecg.ecg);
-		  
-// 		  if(ecg.bpm > 0) {
-// 			  lv_label_set_text_fmt(labelFloor, "%02d", ecg.bpm);
-// 			  lv_label_set_text_fmt(labelBPM, "BPM");
-// 		  }
-		  
-		  lv_chart_set_next(chart, ser1, ecg.ecg);
-		  lv_chart_refresh(chart);
-		  lv_obj_set_style_local_size(chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, LV_DPI/150);
-	  }
-	
-	 printf("ox sem fila: %d \n", ox);
- 
-    vTaskDelay(25);
-  }
+	char ox;
+	ecgInfo ecg;
+
+	for (;;)  {
+		
+		if ( xQueueReceive( xQueueOx, &ox, 0 )) {
+			printf("ox: %d \n", ox);
+			int oxi=ox;
+			lv_label_set_text_fmt(labelOxNum, "%d", oxi);
+			
+			if(oxi<90){
+				if(entrou==0){
+					lv_alarme();
+					vTaskDelay(3000);
+					lv_msgbox_set_anim_time(mbox1,3);
+					lv_msgbox_start_auto_close(mbox1, 0);
+					entrou=1;
+			}
+				
+			}else{
+				entrou=0;
+			}
+			
+			
+		}
+		
+		if (xQueueReceive( xQueueEcgInfo, &(ecg), ( TickType_t )  100 / portTICK_PERIOD_MS)) {
+			printf(" aquiiiiii %d\n", ecg.bpm);
+			
+			 		  if(ecg.bpm > 0) {
+		 				   lv_label_set_text_fmt(labelBaNum, "%d", ecg.bpm);
+			 		  
+				  }
+			
+			lv_chart_set_next(chart, ser1, ecg.ecg);
+			lv_chart_refresh(chart);
+			lv_obj_set_style_local_size(chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, LV_DPI/150);
+		}
+		
+		//printf("ox sem fila: %d \n", ox);
+		
+		vTaskDelay(25);
+	}
 }
 
 static void task_process(void *pvParameters) {
@@ -565,15 +751,33 @@ static void task_process(void *pvParameters) {
 	ecgData ecg;
 	ecgInfo ecgi;
 	int bpm;
+	int flag_pico=0;
+	uint16_t pllPreScale = (int) (((float) 32768) / 1000.0);
+	uint32_t irqRTTvalue = 1;
+	
+	RTT_init(pllPreScale, irqRTTvalue);
 	config_AFEC_pot(AFEC_POT, AFEC_POT_ID, AFEC_POT_CHANNEL, AFEC_pot_Callback);
 	if (xQueueECG == NULL){
 		printf("falha em criar a fila \n");
 	}
 	while(1){
 		if (xQueueReceive( xQueueECG, &(ecg), ( TickType_t ) 10/ portTICK_PERIOD_MS)) {
-			//printf("%d \n", ecg.value);
+			
+			if (flag_pico && ecg.value <= 3280){
+				flag_pico = 0;
+			}
+			
+			if(ecg.value > 3280 && !flag_pico){
+				printf("%d: %d ms\n", ecg.value, g_dT);
+				double valor_bpm = 60000/g_dT;
+				bpm = (int)valor_bpm;
+				printf("bpm: %d\n", bpm);
+				g_dT = 0;
+				flag_pico = 1;
+			}
+			
+			
 			ecgi.ecg = ecg.value;
-			//printf("teste %d", ecgi.ecg);
 			ecgi.bpm = bpm;
 			xQueueSend(xQueueEcgInfo,&ecgi,0);
 		}
@@ -581,34 +785,62 @@ static void task_process(void *pvParameters) {
 	}
 }
 
+
+static void task_clock(void *pvParameters) {
+	//char buffer[10];
+	calendar rtc_initial = {2018, 5, 6, 18, 19, 6 ,1};
+	RTC_init(RTC, ID_RTC, rtc_initial, RTC_IER_ALREN | RTC_IER_SECEN);
+	uint32_t hour;
+	uint32_t minute;
+	uint32_t second;
+	
+
+
+	/* configura alarme do RTC */
+	rtc_get_time(RTC, &hour, &minute, &second);
+	// 	rtc_set_date_alarm(RTC, 1, rtc_initial.month, 1, rtc_initial.day);
+	// 	rtc_set_time_alarm(RTC, 1, rtc_initial.hour, 1, rtc_initial.minute, 1, rtc_initial.second + 1);
+	//
+	while(1){
+		printf("uhuulllll");
+		if( xSemaphoreTake(xSemaphore, ( TickType_t ) 10 / portTICK_PERIOD_MS) == pdTRUE ){
+			
+			toggleDot();
+			rtc_get_time(RTC, &hour, &minute, &second);
+			lv_label_set_text_fmt(labelTempo, "%02d # %02d",hour,minute);
+			
+			
+		}
+	}
+}
 /************************************************************************/
 /* configs                                                              */
 /************************************************************************/
 
 static void configure_lcd(void) {
-  /**LCD pin configure on SPI*/
-  pio_configure_pin(LCD_SPI_MISO_PIO, LCD_SPI_MISO_FLAGS);  //
-  pio_configure_pin(LCD_SPI_MOSI_PIO, LCD_SPI_MOSI_FLAGS);
-  pio_configure_pin(LCD_SPI_SPCK_PIO, LCD_SPI_SPCK_FLAGS);
-  pio_configure_pin(LCD_SPI_NPCS_PIO, LCD_SPI_NPCS_FLAGS);
-  pio_configure_pin(LCD_SPI_RESET_PIO, LCD_SPI_RESET_FLAGS);
-  pio_configure_pin(LCD_SPI_CDS_PIO, LCD_SPI_CDS_FLAGS);
-  
+	/**LCD pin configure on SPI*/
+	pio_configure_pin(LCD_SPI_MISO_PIO, LCD_SPI_MISO_FLAGS);  //
+	pio_configure_pin(LCD_SPI_MOSI_PIO, LCD_SPI_MOSI_FLAGS);
+	pio_configure_pin(LCD_SPI_SPCK_PIO, LCD_SPI_SPCK_FLAGS);
+	pio_configure_pin(LCD_SPI_NPCS_PIO, LCD_SPI_NPCS_FLAGS);
+	pio_configure_pin(LCD_SPI_RESET_PIO, LCD_SPI_RESET_FLAGS);
+	pio_configure_pin(LCD_SPI_CDS_PIO, LCD_SPI_CDS_FLAGS);
+	
 }
 
 static void configure_console(void) {
-  const usart_serial_options_t uart_serial_options = {
-    .baudrate = USART_SERIAL_EXAMPLE_BAUDRATE,
-    .charlength = USART_SERIAL_CHAR_LENGTH,
-    .paritytype = USART_SERIAL_PARITY,
-    .stopbits = USART_SERIAL_STOP_BIT,
-  };
+	const usart_serial_options_t uart_serial_options = {
+		.baudrate = USART_SERIAL_EXAMPLE_BAUDRATE,
+		.charlength = USART_SERIAL_CHAR_LENGTH,
+		.paritytype = USART_SERIAL_PARITY,
+		.stopbits = USART_SERIAL_STOP_BIT,
+	};
 
-  /* Configure console UART. */
-  stdio_serial_init(CONSOLE_UART, &uart_serial_options);
+	/* Configure console UART. */
+	stdio_serial_init(CONSOLE_UART, &uart_serial_options);
 
-  /* Specify that stdout should not be buffered. */
-  setbuf(stdout, NULL);
+	/* Specify that stdout should not be buffered. */
+	setbuf(stdout, NULL);
 }
 
 /************************************************************************/
@@ -616,89 +848,94 @@ static void configure_console(void) {
 /************************************************************************/
 
 void my_flush_cb(lv_disp_drv_t * disp_drv, const lv_area_t * area, lv_color_t * color_p) {
-  ili9341_set_top_left_limit(area->x1, area->y1);   ili9341_set_bottom_right_limit(area->x2, area->y2);
-  ili9341_copy_pixels_to_screen(color_p,  (area->x2 - area->x1) * (area->y2 - area->y1));
-  
-  /* IMPORTANT!!!
-  * Inform the graphics library that you are ready with the flushing*/
-  lv_disp_flush_ready(disp_drv);
+	ili9341_set_top_left_limit(area->x1, area->y1);   ili9341_set_bottom_right_limit(area->x2, area->y2);
+	ili9341_copy_pixels_to_screen(color_p,  (area->x2 - area->x1) * (area->y2 - area->y1));
+	
+	/* IMPORTANT!!!
+	* Inform the graphics library that you are ready with the flushing*/
+	lv_disp_flush_ready(disp_drv);
 }
 
 bool my_input_read(lv_indev_drv_t * drv, lv_indev_data_t*data) {
-  int px, py, pressed;
-  
-  if (readPoint(&px, &py)) {
-    data->state = LV_INDEV_STATE_PR;
-  }
-  else {
-    data->state = LV_INDEV_STATE_REL;
-  }
-  
-  data->point.x = px;
-  data->point.y = py;
-  return false; /*No buffering now so no more data read*/
+	int px, py, pressed;
+	
+	if (readPoint(&px, &py)) {
+		data->state = LV_INDEV_STATE_PR;
+	}
+	else {
+		data->state = LV_INDEV_STATE_REL;
+	}
+	
+	data->point.x = px;
+	data->point.y = py;
+	return false; /*No buffering now so no more data read*/
 }
 
 /************************************************************************/
 /* main                                                                 */
 /************************************************************************/
 int main(void) {
-  /* board and sys init */
-  board_init();
-  sysclk_init();
-  configure_console();
+	/* board and sys init */
+	board_init();
+	sysclk_init();
+	configure_console();
 
-  /* LCd int */
-  configure_lcd();
-  ili9341_init();
-  configure_touch();
-  ili9341_backlight_on();
-  
- 
-  
-  /*LittlevGL init*/
-  lv_init();
-  lv_disp_drv_t disp_drv;                 /*A variable to hold the drivers. Can be local variable*/
-  lv_disp_drv_init(&disp_drv);            /*Basic initialization*/
-  lv_disp_buf_init(&disp_buf, buf_1, NULL, LV_HOR_RES_MAX * LV_VER_RES_MAX);  /*Initialize `disp_buf` with the buffer(s) */
-  disp_drv.buffer = &disp_buf;            /*Set an initialized buffer*/
-  disp_drv.flush_cb = my_flush_cb;        /*Set a flush callback to draw to the display*/
-  lv_disp_t * disp;
-  disp = lv_disp_drv_register(&disp_drv); /*Register the driver and save the created display objects*/
-  
-  /* Init input on LVGL */
-  lv_indev_drv_t indev_drv;
-  lv_indev_drv_init(&indev_drv);      /*Basic initialization*/
-  indev_drv.type = LV_INDEV_TYPE_POINTER;
-  indev_drv.read_cb = my_input_read;
-  /*Register the driver in LVGL and save the created input device object*/
-  lv_indev_t * my_indev = lv_indev_drv_register(&indev_drv);
-  
-  xQueueOx = xQueueCreate(32, sizeof(char));
-  xQueueEcgInfo = xQueueCreate(32, sizeof(ecgInfo));
+	/* LCd int */
+	configure_lcd();
+	ili9341_init();
+	configure_touch();
+	ili9341_backlight_on();
+	
+	
+	
+	/*LittlevGL init*/
+	lv_init();
+	lv_disp_drv_t disp_drv;                 /*A variable to hold the drivers. Can be local variable*/
+	lv_disp_drv_init(&disp_drv);            /*Basic initialization*/
+	lv_disp_buf_init(&disp_buf, buf_1, NULL, LV_HOR_RES_MAX * LV_VER_RES_MAX);  /*Initialize `disp_buf` with the buffer(s) */
+	disp_drv.buffer = &disp_buf;            /*Set an initialized buffer*/
+	disp_drv.flush_cb = my_flush_cb;        /*Set a flush callback to draw to the display*/
+	lv_disp_t * disp;
+	disp = lv_disp_drv_register(&disp_drv); /*Register the driver and save the created display objects*/
+	
+	/* Init input on LVGL */
+	lv_indev_drv_t indev_drv;
+	lv_indev_drv_init(&indev_drv);      /*Basic initialization*/
+	indev_drv.type = LV_INDEV_TYPE_POINTER;
+	indev_drv.read_cb = my_input_read;
+	/*Register the driver in LVGL and save the created input device object*/
+	lv_indev_t * my_indev = lv_indev_drv_register(&indev_drv);
+	
+	xQueueOx = xQueueCreate(32, sizeof(char));
+	xQueueEcgInfo = xQueueCreate(32, sizeof(ecgInfo));
+	xSemaphore = xSemaphoreCreateBinary();
 
-  if (xTaskCreate(task_lcd, "LCD", TASK_LCD_STACK_SIZE, NULL, TASK_LCD_PRIORITY, NULL) != pdPASS) {
-    printf("Failed to create lcd task\r\n");
-  }
-  
-  if (xTaskCreate(task_aps2, "APS2", TASK_APS2_STACK_SIZE, NULL, TASK_APS2_PRIORITY, NULL) != pdPASS) {
-    printf("Failed to create APS task\r\n");
-  }
-  
-  if (xTaskCreate(task_main, "main", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_PRIORITY, NULL) != pdPASS) {
-    printf("Failed to create Main task\r\n");
-  }
-  
+	if (xTaskCreate(task_lcd, "LCD", TASK_LCD_STACK_SIZE, NULL, TASK_LCD_PRIORITY, NULL) != pdPASS) {
+		printf("Failed to create lcd task\r\n");
+	}
+	
+	if (xTaskCreate(task_clock, "CLK", TASK_LCD_STACK_SIZE, NULL, TASK_LCD_PRIORITY, NULL) != pdPASS) {
+		printf("Failed to create clk task\r\n");
+	}
+	
+	if (xTaskCreate(task_aps2, "APS2", TASK_APS2_STACK_SIZE, NULL, TASK_APS2_PRIORITY, NULL) != pdPASS) {
+		printf("Failed to create APS task\r\n");
+	}
+	
+	if (xTaskCreate(task_main, "main", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_PRIORITY, NULL) != pdPASS) {
+		printf("Failed to create Main task\r\n");
+	}
+	
 
-  if (xTaskCreate(task_process, "process", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_PRIORITY, NULL) != pdPASS) {
-	  printf("Failed to create process task\r\n");
-  }
-   
-  /* Start the scheduler. */
-  vTaskStartScheduler();
+	if (xTaskCreate(task_process, "process", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_PRIORITY, NULL) != pdPASS) {
+		printf("Failed to create process task\r\n");
+	}
+	
+	/* Start the scheduler. */
+	vTaskStartScheduler();
 
 
 
-  /* RTOS n?o deve chegar aqui !! */
-  while(1){ }
+	/* RTOS n?o deve chegar aqui !! */
+	while(1){ }
 }
