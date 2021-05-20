@@ -62,7 +62,13 @@ static lv_obj_t * labelBaNum;
 static  lv_obj_t * labelFloor;
 static  lv_obj_t * labelBPM;
 static  lv_obj_t * labelDot;
-lv_obj_t * mbox1;
+
+static  lv_obj_t * labelSalvar;
+static lv_obj_t * mbox1;
+
+static lv_obj_t *mbox, *info;
+static lv_style_t style_modal;
+
 
 volatile char flag_rtc=0;
 volatile char flag_dot = 0;
@@ -72,10 +78,17 @@ volatile bool g_is_conversion_done = false;
 volatile uint32_t g_ul_value = 0;
 volatile int entrou=0;
 volatile int g_dT=0;
+volatile int salvar=0;
+
+static void mbox_event_cb(lv_obj_t *obj, lv_event_t evt);
+static void btn_event_cb(lv_obj_t *btn, lv_event_t evt);
+static void opa_anim(void * bg, lv_anim_value_t v);
 
 int ser1_data[CHAR_DATA_LEN];
 lv_obj_t * chart;
 lv_chart_series_t * ser1;
+volatile int valorBpm;
+volatile int oxi;
 
 typedef struct {
 	uint value;
@@ -358,6 +371,17 @@ static void event_handler2(lv_obj_t * obj, lv_event_t event) {
 	}
 }
 
+static void event_handlerSalvar(lv_obj_t * obj, lv_event_t event) {
+	if(event == LV_EVENT_CLICKED) {
+		printf("Clicked\n");
+		salvar=1;
+	}
+	else if(event == LV_EVENT_VALUE_CHANGED) {
+		printf("Toggled\n");
+		salvar=1;
+	}
+}
+
 static void lv_spinbox_increment_event_cb(lv_obj_t * btn, lv_event_t e)
 {
 	if(e == LV_EVENT_SHORT_CLICKED || e == LV_EVENT_LONG_PRESSED_REPEAT) {
@@ -386,6 +410,62 @@ static void lv_spinbox_decrement_event_cb2(lv_obj_t * btn, lv_event_t e)
 	}
 }
 
+static void btn_event_cb(lv_obj_t *btn, lv_event_t evt)
+{
+	if(evt == LV_EVENT_CLICKED) {
+		/* Create a full-screen background */
+
+		/* Create a base object for the modal background */
+		lv_obj_t *obj = lv_obj_create(lv_scr_act(), NULL);
+		lv_obj_reset_style_list(obj, LV_OBJ_PART_MAIN);
+		lv_obj_add_style(obj, LV_OBJ_PART_MAIN, &style_modal);
+		lv_obj_set_pos(obj, 0, 0);
+		//lv_obj_align(obj, NULL, LV_ALIGN_CENTER, 0, 0);
+		lv_obj_set_size(obj, LV_HOR_RES, LV_VER_RES);
+		//lv_obj_set_height(obj, 200);
+		
+		
+
+		static const char * btns2[] = {"Ok", ""};
+
+		/* Create the message box as a child of the modal background */
+		mbox = lv_msgbox_create(obj, NULL);
+		lv_msgbox_add_btns(mbox, btns2);
+		if(salvar==1){
+			printf("EU ENTREIII");
+			lv_msgbox_set_text_fmt(mbox, "Batimentos: %d Oxigenio: %d", valorBpm,oxi);
+		}
+		lv_obj_align(mbox, NULL, LV_ALIGN_CENTER, 0, 0);
+		lv_obj_set_event_cb(mbox, mbox_event_cb);
+
+		/* Fade the message box in with an animation */
+		lv_anim_t a;
+		lv_anim_init(&a);
+		lv_anim_set_var(&a, obj);
+		lv_anim_set_time(&a, 500);
+		lv_anim_set_values(&a, LV_OPA_TRANSP, LV_OPA_50);
+		lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)opa_anim);
+		lv_anim_start(&a);
+
+	}
+}
+
+static void mbox_event_cb(lv_obj_t *obj, lv_event_t evt)
+{
+    if(evt == LV_EVENT_DELETE && obj == mbox) {
+        /* Delete the parent modal background */
+        lv_obj_del_async(lv_obj_get_parent(mbox));
+        mbox = NULL; /* happens before object is actually deleted! */
+    } else if(evt == LV_EVENT_VALUE_CHANGED) {
+        /* A button was clicked */
+        lv_msgbox_start_auto_close(mbox, 0);
+    }
+}
+
+static void opa_anim(void * bg, lv_anim_value_t v)
+{
+	lv_obj_set_style_local_bg_opa(bg, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, v);
+}
 
 
 void toggleDot(void)
@@ -434,8 +514,8 @@ void lv_inicio(void){
 	lv_obj_align(btnStart, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, -27);
 
 	// altera a cor de fundo, borda do botão criado para PRETO
-	lv_obj_set_style_local_bg_color(btnStart, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_MAGENTA);
-	lv_obj_set_style_local_border_color(btnStart, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT,  LV_COLOR_MAGENTA);
+	lv_obj_set_style_local_bg_color(btnStart, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_ROZINHA);
+	lv_obj_set_style_local_border_color(btnStart, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT,  LV_COLOR_ROZINHA);
 	lv_obj_set_style_local_border_width(btnStart, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, 0);
 	
 	labelStart = lv_label_create(btnStart, NULL);
@@ -538,8 +618,8 @@ void lv_principal(void){
 	lv_obj_align(btnPower, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -10, -10);
 
 	// altera a cor de fundo, borda do botão criado para PRETO
-	lv_obj_set_style_local_bg_color(btnPower, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_MAGENTA );
-	lv_obj_set_style_local_border_color(btnPower, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_MAGENTA );
+	lv_obj_set_style_local_bg_color(btnPower, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_ROZINHA );
+	lv_obj_set_style_local_border_color(btnPower, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_ROZINHA );
 	lv_obj_set_style_local_border_width(btnPower, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, 0);
 	
 	labelPower = lv_label_create(btnPower, NULL);
@@ -591,7 +671,7 @@ void lv_principal(void){
 	labelOxNum = lv_label_create(lv_scr_act(), NULL);
 	lv_obj_align(labelOxNum, NULL, LV_ALIGN_IN_LEFT_MID, 40 , 42);
 	lv_obj_set_style_local_text_font(labelOxNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, &dseg30);
-	lv_obj_set_style_local_text_color(labelOxNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_MAGENTA);
+	lv_obj_set_style_local_text_color(labelOxNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_ROZINHA);
 	//lv_label_set_text_fmt(labelOxNum, "97");
 	
 	lv_obj_t * labelOxUni = lv_label_create(lv_scr_act(), NULL);
@@ -626,7 +706,18 @@ void lv_principal(void){
 	lv_label_set_text(labelBaUni, "#2D9613 BPM");
 	lv_obj_set_width(labelBaUni, 150);
 	
+	//-------------------
+	// botao salvar
+	//-------------------
 	
+	lv_obj_t * btnSalvar = lv_btn_create(lv_scr_act(), NULL);
+	lv_obj_set_size(btnSalvar, 70, 25);
+	lv_obj_set_event_cb(btnSalvar, event_handlerSalvar);
+	lv_obj_align(btnSalvar, NULL, LV_ALIGN_IN_BOTTOM_LEFT, 140, -10);
+	
+	/* Create a label on the button */
+	labelSalvar = lv_label_create(btnSalvar, NULL);
+	lv_label_set_text(labelSalvar, "Salvar");
 }
 
 
@@ -675,6 +766,24 @@ void lv_alarme(void)
 }
 
 
+void lv_valorSalvo(void){
+	lv_style_init(&style_modal);
+	lv_style_set_bg_color(&style_modal, LV_STATE_DEFAULT, LV_COLOR_BLACK);
+
+
+	/* Create a button, then set its position and event callback */
+	lv_obj_t *btn = lv_btn_create(lv_scr_act(), NULL);
+	lv_obj_set_size(btn, 120, 25);
+	lv_obj_set_event_cb(btn, btn_event_cb);
+	lv_obj_align(btn, NULL, LV_ALIGN_IN_BOTTOM_LEFT, 10, -10);
+
+	/* Create a label on the button */
+	lv_obj_t *label = lv_label_create(btn, NULL);
+	lv_label_set_text(label, "Valores salvos");
+
+}
+
+
 
 /************************************************************************/
 /* TASKS                                                                */
@@ -689,6 +798,7 @@ static void task_lcd(void *pvParameters) {
 	lv_principal();
 	lv_screen_chart();
 	//lv_alarme();
+	lv_valorSalvo();
 	
 	for (;;)  {
 		lv_tick_inc(50);
@@ -701,12 +811,17 @@ static void task_main(void *pvParameters) {
 
 	char ox;
 	ecgInfo ecg;
+	
+	int i=7;
+	int e=0;
+	int vetorBpm[i];
+	int vetorOx[i];
 
 	for (;;)  {
 		
 		if ( xQueueReceive( xQueueOx, &ox, 0 )) {
 			printf("ox: %d \n", ox);
-			int oxi=ox;
+			oxi=ox;
 			lv_label_set_text_fmt(labelOxNum, "%d", oxi);
 			
 			if(oxi<90){
@@ -716,20 +831,18 @@ static void task_main(void *pvParameters) {
 					lv_msgbox_set_anim_time(mbox1,3);
 					lv_msgbox_start_auto_close(mbox1, 0);
 					entrou=1;
-			}
-				
+				}	
 			}else{
 				entrou=0;
 			}
-			
-			
 		}
 		
 		if (xQueueReceive( xQueueEcgInfo, &(ecg), ( TickType_t )  100 / portTICK_PERIOD_MS)) {
-			printf(" aquiiiiii %d\n", ecg.bpm);
+			printf(" %d\n", ecg.bpm);
 			
 			 		  if(ecg.bpm > 0) {
-		 				   lv_label_set_text_fmt(labelBaNum, "%d", ecg.bpm);
+		 				lv_label_set_text_fmt(labelBaNum, "%d", ecg.bpm);
+						valorBpm=ecg.bpm;
 			 		  
 				  }
 			
@@ -737,6 +850,19 @@ static void task_main(void *pvParameters) {
 			lv_chart_refresh(chart);
 			lv_obj_set_style_local_size(chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, LV_DPI/150);
 		}
+		
+		if (salvar==1){
+			if(e<i){
+				vetorBpm[e]=valorBpm;
+				vetorOx[e]=oxi;
+				e++;
+				//salvar=0;
+			}
+			//lv_msgbox_set_text_fmt(mbox, "Batimentos: %d Oxigenio: %d", valorBpm, oxi);
+			//lv_msgbox_set_text(mbox, "Batime");
+		}
+		
+		//lv_set_text_fmt(mbox, "%d", oxi);
 		
 		//printf("ox sem fila: %d \n", ox);
 		
@@ -802,7 +928,7 @@ static void task_clock(void *pvParameters) {
 	// 	rtc_set_time_alarm(RTC, 1, rtc_initial.hour, 1, rtc_initial.minute, 1, rtc_initial.second + 1);
 	//
 	while(1){
-		printf("uhuulllll");
+		//printf("uhuulllll");
 		if( xSemaphoreTake(xSemaphore, ( TickType_t ) 10 / portTICK_PERIOD_MS) == pdTRUE ){
 			
 			toggleDot();
