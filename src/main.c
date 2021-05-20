@@ -30,21 +30,6 @@ LV_FONT_DECLARE(dseg70);
 
 
 /************************************************************************/
-/* STATIC                                                               */
-/************************************************************************/
-
-typedef struct  {
-	uint32_t year;
-	uint32_t month;
-	uint32_t day;
-	uint32_t week;
-	uint32_t hour;
-	uint32_t minute;
-	uint32_t second;
-} calendar;
-
-
-/************************************************************************/
 /* STATIC  LVGL                                                           */
 /************************************************************************/
 
@@ -67,7 +52,6 @@ static lv_obj_t * labelBaUni;
 static lv_obj_t * labelBaNum;
 static lv_obj_t * labelFloor;
 static lv_obj_t * labelBPM;
-static lv_obj_t * labelDot;
 static lv_obj_t * labelSalvar;
 static lv_obj_t * mbox1;
 static lv_obj_t *mbox, *info;
@@ -76,24 +60,39 @@ static lv_style_t style_modal;
 
 volatile char flag_rtc=0;
 volatile char flag_dot = 0;
-
-
 volatile bool g_is_conversion_done = false;
 /** The conversion data value */
 volatile uint32_t g_ul_value = 0;
 volatile int entrou=0;
 volatile int g_dT=0;
 volatile int salvar=0;
-
-static void mbox_event_cb(lv_obj_t *obj, lv_event_t evt);
-static void btn_event_cb(lv_obj_t *btn, lv_event_t evt);
-static void opa_anim(void * bg, lv_anim_value_t v);
-
 int ser1_data[CHAR_DATA_LEN];
 lv_obj_t * chart;
 lv_chart_series_t * ser1;
 volatile int valorBpm;
 volatile int oxi;
+
+volatile int hora;
+volatile int minuto;
+
+
+static void mbox_event_cb(lv_obj_t *obj, lv_event_t evt);
+static void btn_event_cb(lv_obj_t *btn, lv_event_t evt);
+static void opa_anim(void * bg, lv_anim_value_t v);
+
+
+
+typedef struct  {
+	uint32_t year;
+	uint32_t month;
+	uint32_t day;
+	uint32_t week;
+	uint32_t hour;
+	uint32_t minute;
+	uint32_t second;
+} calendar;
+
+
 
 typedef struct {
 	uint value;
@@ -106,7 +105,6 @@ typedef struct {
 
 QueueHandle_t xQueueEcgInfo;
 QueueHandle_t xQueueECG;
-
 SemaphoreHandle_t xSemaphore;
 /************************************************************************/
 /* RTOS                                                                 */
@@ -361,6 +359,12 @@ void RTC_init(Rtc *rtc, uint32_t id_rtc, calendar t, uint32_t irq_type){
 static void event_handler(lv_obj_t * obj, lv_event_t event) {
 	if(event == LV_EVENT_CLICKED) {
 		printf("Clicked\n");
+		hora= lv_spinbox_get_value(spinbox);
+		minuto=  lv_spinbox_get_value(spinbox2);
+	
+		
+		printf("HORA %d", hora);
+		printf("MINUTO %d", minuto);
 	}
 	else if(event == LV_EVENT_VALUE_CHANGED) {
 		printf("Toggled\n");
@@ -378,16 +382,16 @@ static void event_handler2(lv_obj_t * obj, lv_event_t event) {
 
 static void event_handler_alarm(lv_obj_t * obj, lv_event_t evt)
 {
-	 if(evt == LV_EVENT_DELETE && obj == mbox1) {
-		 /* Delete the parent modal background */
-		 //lv_obj_del_async(lv_obj_get_parent(mbox1));
-		 lv_msgbox_start_auto_close(mbox1, 0);
-		 mbox1 = NULL; /* happens before object is actually deleted! */
-		 
-		 } else if(evt == LV_EVENT_VALUE_CHANGED) {
-		 /* A button was clicked */
-		 lv_msgbox_start_auto_close(mbox1, 0);
-	 }
+	if(evt == LV_EVENT_DELETE && obj == mbox1) {
+		/* Delete the parent modal background */
+		//lv_obj_del_async(lv_obj_get_parent(mbox1));
+		lv_msgbox_start_auto_close(mbox1, 0);
+		mbox1 = NULL; /* happens before object is actually deleted! */
+		
+		} else if(evt == LV_EVENT_VALUE_CHANGED) {
+		/* A button was clicked */
+		lv_msgbox_start_auto_close(mbox1, 0);
+	}
 }
 static void event_handlerSalvar(lv_obj_t * obj, lv_event_t event) {
 	if(event == LV_EVENT_CLICKED) {
@@ -470,14 +474,14 @@ static void btn_event_cb(lv_obj_t *btn, lv_event_t evt)
 
 static void mbox_event_cb(lv_obj_t *obj, lv_event_t evt)
 {
-    if(evt == LV_EVENT_DELETE && obj == mbox) {
-        /* Delete the parent modal background */
-        lv_obj_del_async(lv_obj_get_parent(mbox));
-        mbox = NULL; /* happens before object is actually deleted! */
-    } else if(evt == LV_EVENT_VALUE_CHANGED) {
-        /* A button was clicked */
-        lv_msgbox_start_auto_close(mbox, 0);
-    }
+	if(evt == LV_EVENT_DELETE && obj == mbox) {
+		/* Delete the parent modal background */
+		lv_obj_del_async(lv_obj_get_parent(mbox));
+		mbox = NULL; /* happens before object is actually deleted! */
+		} else if(evt == LV_EVENT_VALUE_CHANGED) {
+		/* A button was clicked */
+		lv_msgbox_start_auto_close(mbox, 0);
+	}
 }
 
 static void opa_anim(void * bg, lv_anim_value_t v)
@@ -485,12 +489,6 @@ static void opa_anim(void * bg, lv_anim_value_t v)
 	lv_obj_set_style_local_bg_opa(bg, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, v);
 }
 
-
-void toggleDot(void)
-{
-	if(flag_dot == 1){ flag_dot = 0; lv_label_set_text_fmt(labelDot, "#",17,15);}
-	else { flag_dot = 1; lv_label_set_text_fmt(labelDot, ":",17,15); }
-}
 
 
 /************************************************************************/
@@ -526,7 +524,8 @@ void lv_inicio(void){
 	// cria botao de tamanho 60x60 redondo
 	lv_obj_t * btnStart = lv_btn_create(lv_scr_act(), NULL);
 	lv_obj_set_event_cb(btnStart, event_handler);
-	lv_obj_set_width(btnStart, 100);  lv_obj_set_height(btnStart, 30);
+	lv_obj_set_width(btnStart, 100);
+	lv_obj_set_height(btnStart, 30);
 
 	// alinha no canto esquerdo e desloca um pouco para cima e para direita
 	lv_obj_align(btnStart, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, -27);
@@ -667,13 +666,6 @@ void lv_principal(void){
 	lv_obj_set_width(labelTempo, 150);
 	
 	
-	 labelDot = lv_label_create(lv_scr_act(), NULL);
-	lv_label_set_long_mode(  labelDot, LV_LABEL_LONG_BREAK);
-	lv_label_set_recolor(  labelDot, true);
-	lv_obj_align( labelDot, NULL, LV_ALIGN_IN_TOP_MID, 14, 25);
-	lv_label_set_text( labelDot, "#000000 : ");
-	lv_obj_set_width( labelDot, 150);
-	
 	//-------------------
 	//Oxigenio
 	//-------------------
@@ -812,10 +804,15 @@ static void task_lcd(void *pvParameters) {
 	
 	LV_IMG_DECLARE(Image);
 	LV_IMG_DECLARE(miniLogo);
+	
 	//lv_inicio();
+
+		
 	lv_principal();
 	lv_screen_chart();
 	lv_valorSalvo();
+		
+
 	
 	for (;;)  {
 		lv_tick_inc(50);
@@ -842,8 +839,8 @@ static void task_main(void *pvParameters) {
 				if(entrou==0){
 					lv_alarme();
 					entrou=1;
-				}	
-			}else{
+				}
+				}else{
 				entrou=0;
 			}
 		}
@@ -851,11 +848,11 @@ static void task_main(void *pvParameters) {
 		if (xQueueReceive( xQueueEcgInfo, &(ecg), ( TickType_t )  100 / portTICK_PERIOD_MS)) {
 			printf(" %d\n", ecg.bpm);
 			
-			 		  if(ecg.bpm > 0) {
-		 				lv_label_set_text_fmt(labelBaNum, "%d", ecg.bpm);
-						valorBpm=ecg.bpm;
-			 		  
-				  }
+			if(ecg.bpm > 0) {
+				lv_label_set_text_fmt(labelBaNum, "%d", ecg.bpm);
+				valorBpm=ecg.bpm;
+				
+			}
 			
 			lv_chart_set_next(chart, ser1, ecg.ecg);
 			lv_chart_refresh(chart);
@@ -912,27 +909,27 @@ static void task_process(void *pvParameters) {
 
 static void task_clock(void *pvParameters) {
 	//char buffer[10];
-	calendar rtc_initial = {2018, 5, 6, 18, 19, 6 ,1};
+	calendar rtc_initial = {2018, 5, 6, 18, hora, minuto ,1};
 	RTC_init(RTC, ID_RTC, rtc_initial, RTC_IER_ALREN | RTC_IER_SECEN);
 	uint32_t hour;
 	uint32_t minute;
 	uint32_t second;
 	
-
-
-	/* configura alarme do RTC */
 	rtc_get_time(RTC, &hour, &minute, &second);
-	// 	rtc_set_date_alarm(RTC, 1, rtc_initial.month, 1, rtc_initial.day);
-	// 	rtc_set_time_alarm(RTC, 1, rtc_initial.hour, 1, rtc_initial.minute, 1, rtc_initial.second + 1);
-	//
+	
 	while(1){
 		//printf("uhuulllll");
 		if( xSemaphoreTake(xSemaphore, ( TickType_t ) 10 / portTICK_PERIOD_MS) == pdTRUE ){
 			
-			toggleDot();
-			rtc_get_time(RTC, &hour, &minute, &second);
-			lv_label_set_text_fmt(labelTempo, "%02d # %02d",hour,minute);
-			
+		
+			if(flag_dot==1){
+				rtc_get_time(RTC, &hour, &minute, &second);
+				lv_label_set_text_fmt(labelTempo, "%02d # # %02d",hour,minute);
+			}else{
+				rtc_get_time(RTC, &hour, &minute, &second);
+				lv_label_set_text_fmt(labelTempo, "%02d : %02d",hour,minute);
+			}
+			flag_dot=!flag_dot;
 			
 		}
 	}
