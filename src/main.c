@@ -27,6 +27,8 @@ LV_FONT_DECLARE(dseg70);
 #define AFEC_POT_ID ID_AFEC1
 #define AFEC_POT_CHANNEL 6
 #define CHAR_DATA_LEN 250
+
+
 /************************************************************************/
 /* STATIC                                                               */
 /************************************************************************/
@@ -41,12 +43,16 @@ typedef struct  {
 	uint32_t second;
 } calendar;
 
+
+/************************************************************************/
+/* STATIC  LVGL                                                           */
+/************************************************************************/
+
+
 /*A static or global variable to store the buffers*/
 static lv_disp_buf_t disp_buf;
-
 /*Static or global buffer(s). The second buffer is optional*/
 static lv_color_t buf_1[LV_HOR_RES_MAX * LV_VER_RES_MAX];
-
 static  lv_obj_t * labelStart;
 static  lv_obj_t * labelPower;
 static lv_obj_t * spinbox;
@@ -59,19 +65,18 @@ static lv_obj_t * labelOxNum;
 static lv_obj_t * labelBa;
 static lv_obj_t * labelBaUni;
 static lv_obj_t * labelBaNum;
-static  lv_obj_t * labelFloor;
-static  lv_obj_t * labelBPM;
-static  lv_obj_t * labelDot;
-
-static  lv_obj_t * labelSalvar;
+static lv_obj_t * labelFloor;
+static lv_obj_t * labelBPM;
+static lv_obj_t * labelDot;
+static lv_obj_t * labelSalvar;
 static lv_obj_t * mbox1;
-
 static lv_obj_t *mbox, *info;
 static lv_style_t style_modal;
 
 
 volatile char flag_rtc=0;
 volatile char flag_dot = 0;
+
 
 volatile bool g_is_conversion_done = false;
 /** The conversion data value */
@@ -371,6 +376,19 @@ static void event_handler2(lv_obj_t * obj, lv_event_t event) {
 	}
 }
 
+static void event_handler_alarm(lv_obj_t * obj, lv_event_t evt)
+{
+	 if(evt == LV_EVENT_DELETE && obj == mbox1) {
+		 /* Delete the parent modal background */
+		 //lv_obj_del_async(lv_obj_get_parent(mbox1));
+		 lv_msgbox_start_auto_close(mbox1, 0);
+		 mbox1 = NULL; /* happens before object is actually deleted! */
+		 
+		 } else if(evt == LV_EVENT_VALUE_CHANGED) {
+		 /* A button was clicked */
+		 lv_msgbox_start_auto_close(mbox1, 0);
+	 }
+}
 static void event_handlerSalvar(lv_obj_t * obj, lv_event_t event) {
 	if(event == LV_EVENT_CLICKED) {
 		printf("Clicked\n");
@@ -755,13 +773,13 @@ void lv_screen_chart(void) {
 
 void lv_alarme(void)
 {
-	//static const char * btns[] ={"OK", ""};
+	static const char * btns[] ={"OK", ""};
 
 	mbox1 = lv_msgbox_create(lv_scr_act(), NULL);
 	lv_msgbox_set_text(mbox1, "Cuidado! Sua oxigenacao esta abaixo de 90.");
-	//lv_msgbox_add_btns(mbox1, btns);
+	lv_msgbox_add_btns(mbox1, btns);
 	lv_obj_set_width(mbox1, 200);
-	//lv_obj_set_event_cb(mbox1, event_handler_alarm);
+	lv_obj_set_event_cb(mbox1, event_handler_alarm);
 	lv_obj_align(mbox1, NULL, LV_ALIGN_CENTER, 0, 0); /*Align to the corner*/
 }
 
@@ -797,7 +815,6 @@ static void task_lcd(void *pvParameters) {
 	//lv_inicio();
 	lv_principal();
 	lv_screen_chart();
-	//lv_alarme();
 	lv_valorSalvo();
 	
 	for (;;)  {
@@ -811,11 +828,7 @@ static void task_main(void *pvParameters) {
 
 	char ox;
 	ecgInfo ecg;
-	
-	int i=7;
-	int e=0;
-	int vetorBpm[i];
-	int vetorOx[i];
+
 
 	for (;;)  {
 		
@@ -825,11 +838,9 @@ static void task_main(void *pvParameters) {
 			lv_label_set_text_fmt(labelOxNum, "%d", oxi);
 			
 			if(oxi<90){
+				
 				if(entrou==0){
 					lv_alarme();
-					vTaskDelay(3000);
-					lv_msgbox_set_anim_time(mbox1,3);
-					lv_msgbox_start_auto_close(mbox1, 0);
 					entrou=1;
 				}	
 			}else{
@@ -851,20 +862,7 @@ static void task_main(void *pvParameters) {
 			lv_obj_set_style_local_size(chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, LV_DPI/150);
 		}
 		
-		if (salvar==1){
-			if(e<i){
-				vetorBpm[e]=valorBpm;
-				vetorOx[e]=oxi;
-				e++;
-				//salvar=0;
-			}
-			//lv_msgbox_set_text_fmt(mbox, "Batimentos: %d Oxigenio: %d", valorBpm, oxi);
-			//lv_msgbox_set_text(mbox, "Batime");
-		}
-		
-		//lv_set_text_fmt(mbox, "%d", oxi);
-		
-		//printf("ox sem fila: %d \n", ox);
+
 		
 		vTaskDelay(25);
 	}
