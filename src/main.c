@@ -57,6 +57,13 @@ static lv_obj_t * mbox1;
 static lv_obj_t *mbox, *info;
 static lv_style_t style_modal;
 
+static lv_obj_t * btnStart;
+static lv_obj_t * btn;
+static lv_obj_t * btn2;
+static lv_obj_t * img1;
+static lv_obj_t * label1;
+static lv_obj_t * label2;
+
 
 volatile char flag_rtc=0;
 volatile char flag_dot = 0;
@@ -71,6 +78,10 @@ lv_obj_t * chart;
 lv_chart_series_t * ser1;
 volatile int valorBpm;
 volatile int oxi;
+volatile int clicou=0;
+volatile int inicio=1;
+
+volatile int flag_begin=0;
 
 volatile int hora;
 volatile int minuto;
@@ -81,6 +92,9 @@ static void btn_event_cb(lv_obj_t *btn, lv_event_t evt);
 static void opa_anim(void * bg, lv_anim_value_t v);
 
 
+void lv_principal(void);
+void lv_screen_chart(void);
+void lv_valorSalvo(void);
 
 typedef struct  {
 	uint32_t year;
@@ -365,6 +379,11 @@ static void event_handler(lv_obj_t * obj, lv_event_t event) {
 		
 		printf("HORA %d", hora);
 		printf("MINUTO %d", minuto);
+		
+		//clicou=1;
+		lv_principal();
+		lv_screen_chart();
+		lv_valorSalvo();
 	}
 	else if(event == LV_EVENT_VALUE_CHANGED) {
 		printf("Toggled\n");
@@ -393,6 +412,17 @@ static void event_handler_alarm(lv_obj_t * obj, lv_event_t evt)
 		lv_msgbox_start_auto_close(mbox1, 0);
 	}
 }
+
+static void event_handlerDesligar(lv_obj_t * obj, lv_event_t event) {
+	if(event == LV_EVENT_CLICKED) {
+		printf("Clicked\n");
+		flag_begin=!flag_begin;
+	}
+	else if(event == LV_EVENT_VALUE_CHANGED) {
+		printf("Toggled\n");
+	}
+}
+
 static void event_handlerSalvar(lv_obj_t * obj, lv_event_t event) {
 	if(event == LV_EVENT_CLICKED) {
 		printf("Clicked\n");
@@ -455,7 +485,7 @@ static void btn_event_cb(lv_obj_t *btn, lv_event_t evt)
 		lv_msgbox_add_btns(mbox, btns2);
 		if(salvar==1){
 			printf("EU ENTREIII");
-			lv_msgbox_set_text_fmt(mbox, "Batimentos: %d Oxigenio: %d", valorBpm,oxi);
+			lv_msgbox_set_text_fmt(mbox, "Batimentos: %d Oxigenio: %d", valorBpm, oxi);
 		}
 		lv_obj_align(mbox, NULL, LV_ALIGN_CENTER, 0, 0);
 		lv_obj_set_event_cb(mbox, mbox_event_cb);
@@ -507,13 +537,19 @@ const int g_ecgSize =  sizeof(ecg)/sizeof(ecg[0]);
 /* lvgl                                                                 */
 /************************************************************************/
 void lv_inicio(void){
+	
+	
+	
+	lv_obj_t * page2 = lv_page_create(lv_scr_act(), NULL);
+	lv_obj_set_size(page2, 320, 240);
+	lv_obj_align(page2, NULL, LV_ALIGN_CENTER, 0, 0);
 	lv_obj_set_style_local_bg_color(lv_scr_act(), LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_WHITE);
 	
 	//-------------------
 	// LOGO
 	//-------------------
 
-	lv_obj_t * img1 = lv_img_create(lv_scr_act(), NULL);
+	img1 = lv_img_create(lv_scr_act(), NULL);
 	lv_img_set_src(img1, &Image);
 	lv_obj_align(img1, NULL, LV_ALIGN_CENTER, 0, -80);
 	
@@ -522,7 +558,7 @@ void lv_inicio(void){
 	//-------------------
 
 	// cria botao de tamanho 60x60 redondo
-	lv_obj_t * btnStart = lv_btn_create(lv_scr_act(), NULL);
+	btnStart = lv_btn_create(lv_scr_act(), NULL);
 	lv_obj_set_event_cb(btnStart, event_handler);
 	lv_obj_set_width(btnStart, 100);
 	lv_obj_set_height(btnStart, 30);
@@ -591,7 +627,7 @@ void lv_inicio(void){
 	// HORA
 	//-------------------
 	
-	lv_obj_t * label1 = lv_label_create(lv_scr_act(), NULL);
+	label1 = lv_label_create(lv_scr_act(), NULL);
 	lv_label_set_long_mode(label1, LV_LABEL_LONG_BREAK);
 	lv_label_set_recolor(label1, true);
 	lv_obj_align(label1, NULL, LV_ALIGN_CENTER, -76, -35);
@@ -603,7 +639,7 @@ void lv_inicio(void){
 	//minuto
 	//-------------------
 	
-	lv_obj_t * label2 = lv_label_create(lv_scr_act(), NULL);
+	label2 = lv_label_create(lv_scr_act(), NULL);
 	lv_label_set_long_mode(label2, LV_LABEL_LONG_BREAK);
 	lv_label_set_recolor(label2, true);
 	lv_obj_align(label2, NULL, LV_ALIGN_CENTER, 55, -35);
@@ -612,6 +648,10 @@ void lv_inicio(void){
 }
 
 void lv_principal(void){
+	 lv_obj_t * page = lv_page_create(lv_scr_act(), NULL);
+	 lv_obj_set_size(page, 320, 240);
+	 lv_obj_align(page, NULL, LV_ALIGN_CENTER, 0, 0);
+	
 	lv_obj_set_style_local_bg_color(lv_scr_act(), LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_WHITE);
 	
 	//-------------------
@@ -628,7 +668,7 @@ void lv_principal(void){
 
 	// cria botao de tamanho 60x60 redondo
 	lv_obj_t * btnPower = lv_btn_create(lv_scr_act(), NULL);
-	lv_obj_set_event_cb(btnPower, event_handler);
+	lv_obj_set_event_cb(btnPower, event_handlerDesligar);
 	lv_obj_set_width(btnPower, 40);  lv_obj_set_height(btnPower, 40);
 
 	// alinha no canto esquerdo e desloca um pouco para cima e para direita
@@ -657,12 +697,12 @@ void lv_principal(void){
 	//-------------------
 	//Hora e minuto
 	//-------------------
-	
 	labelTempo = lv_label_create(lv_scr_act(), NULL);
+	
 	lv_label_set_long_mode(labelTempo, LV_LABEL_LONG_BREAK);
 	lv_label_set_recolor(labelTempo, true);
 	lv_obj_align(labelTempo, NULL, LV_ALIGN_IN_TOP_MID, 0, 25);
-	//lv_label_set_text(labelTempo, "#000000 17:04");
+	lv_label_set_text(labelTempo, "#000000 17:04");
 	lv_obj_set_width(labelTempo, 150);
 	
 	
@@ -681,7 +721,7 @@ void lv_principal(void){
 	labelOxNum = lv_label_create(lv_scr_act(), NULL);
 	lv_obj_align(labelOxNum, NULL, LV_ALIGN_IN_LEFT_MID, 40 , 42);
 	lv_obj_set_style_local_text_font(labelOxNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, &dseg30);
-	lv_obj_set_style_local_text_color(labelOxNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_ROZINHA);
+	/*lv_obj_set_style_local_text_color(labelOxNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_ROZINHA);*/
 	//lv_label_set_text_fmt(labelOxNum, "97");
 	
 	lv_obj_t * labelOxUni = lv_label_create(lv_scr_act(), NULL);
@@ -706,7 +746,7 @@ void lv_principal(void){
 	labelBaNum = lv_label_create(lv_scr_act(), NULL);
 	lv_obj_align(labelBaNum, NULL, LV_ALIGN_IN_LEFT_MID, 40 , -28);
 	lv_obj_set_style_local_text_font(labelBaNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, &dseg30);
-	lv_obj_set_style_local_text_color(labelBaNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_GREEN);
+	/*lv_obj_set_style_local_text_color(labelBaNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_GREEN);*/
 	/*lv_label_set_text_fmt(labelBaNum, "170");*/
 	
 	lv_obj_t *labelBaUni = lv_label_create(lv_scr_act(), NULL);
@@ -804,20 +844,25 @@ static void task_lcd(void *pvParameters) {
 	
 	LV_IMG_DECLARE(Image);
 	LV_IMG_DECLARE(miniLogo);
-	
-	//lv_inicio();
-
-		
 	lv_principal();
-	lv_screen_chart();
-	lv_valorSalvo();
-		
-
+	lv_inicio();
+	//clicou=0;
+	
+//  	lv_principal();
+//  	lv_screen_chart();
+//  	lv_valorSalvo();
 	
 	for (;;)  {
 		lv_tick_inc(50);
 		lv_task_handler();
 		vTaskDelay(50);
+// 		
+//  		if(clicou){
+// 			lv_principal();
+//  			lv_screen_chart();
+//  			lv_valorSalvo();
+//  			clicou=0;
+//  		}
 	}
 }
 
@@ -825,42 +870,74 @@ static void task_main(void *pvParameters) {
 
 	char ox;
 	ecgInfo ecg;
+	int flag=0;
+	int anterior;
+	int anteriorOx;
 
 
 	for (;;)  {
 		
-		if ( xQueueReceive( xQueueOx, &ox, 0 )) {
-			printf("ox: %d \n", ox);
-			oxi=ox;
-			lv_label_set_text_fmt(labelOxNum, "%d", oxi);
+		
+		
+		if(flag_begin){
 			
-			if(oxi<90){
-				
-				if(entrou==0){
-					lv_alarme();
-					entrou=1;
+			if ( xQueueReceive( xQueueOx, &ox, 0 )) {
+				printf("ox: %d \n", ox);
+				oxi=ox;
+				if (anteriorOx>= oxi)
+				{
+					lv_obj_set_style_local_text_color(labelOxNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_RED);
+					}else{
+					lv_obj_set_style_local_text_color(labelOxNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_GREEN);
 				}
-				}else{
-				entrou=0;
-			}
-		}
-		
-		if (xQueueReceive( xQueueEcgInfo, &(ecg), ( TickType_t )  100 / portTICK_PERIOD_MS)) {
-			printf(" %d\n", ecg.bpm);
 			
-			if(ecg.bpm > 0) {
-				lv_label_set_text_fmt(labelBaNum, "%d", ecg.bpm);
-				valorBpm=ecg.bpm;
+				anteriorOx = oxi;
 				
+				lv_label_set_text_fmt(labelOxNum, "%d", oxi);
+				
+				if(oxi<90){
+					
+					if(entrou==0){
+						lv_alarme();
+						entrou=1;
+					}
+					}else{
+					entrou=0;
+				}
 			}
 			
-			lv_chart_set_next(chart, ser1, ecg.ecg);
-			lv_chart_refresh(chart);
+			if (xQueueReceive( xQueueEcgInfo, &(ecg), ( TickType_t )  100 / portTICK_PERIOD_MS)) {
+				//printf(" %d\n", ecg.bpm);
+				
+				if(ecg.bpm > 0) {
+					
+					if (anterior> ecg.bpm)
+					{
+						lv_obj_set_style_local_text_color(labelBaNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_GREEN);
+					}else if (anterior<ecg.bpm){
+						lv_obj_set_style_local_text_color(labelBaNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_RED);
+					}
+					anterior = ecg.bpm;
+					lv_label_set_text_fmt(labelBaNum, "%d", ecg.bpm);
+					valorBpm=ecg.bpm;
+				}
+				
+				lv_chart_set_next(chart, ser1, ecg.ecg);
+				lv_chart_refresh(chart);
+				lv_obj_set_style_local_size(chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, LV_DPI/150);
+			}
+		
+			flag=1;	
+		}else if(flag){
+			lv_label_set_text(labelOxNum, "--");
+			lv_label_set_text(labelBaNum, "--");
+			lv_chart_set_next(chart, ser1, 0);
 			lv_obj_set_style_local_size(chart, LV_CHART_PART_SERIES, LV_STATE_DEFAULT, LV_DPI/150);
+			lv_chart_refresh(chart);
+			pmc_sleep(SAM_PM_SMODE_SLEEP_WFI);
 		}
 		
-
-		
+			
 		vTaskDelay(25);
 	}
 }
@@ -882,21 +959,22 @@ static void task_process(void *pvParameters) {
 		printf("falha em criar a fila \n");
 	}
 	while(1){
+	
 		if (xQueueReceive( xQueueECG, &(ecg), ( TickType_t ) 10/ portTICK_PERIOD_MS)) {
+			
 			
 			if (flag_pico && ecg.value <= 3280){
 				flag_pico = 0;
 			}
 			
 			if(ecg.value > 3280 && !flag_pico){
-				printf("%d: %d ms\n", ecg.value, g_dT);
+				//printf("%d: %d ms\n", ecg.value, g_dT);
 				double valor_bpm = 60000/g_dT;
 				bpm = (int)valor_bpm;
 				printf("bpm: %d\n", bpm);
 				g_dT = 0;
 				flag_pico = 1;
 			}
-			
 			
 			ecgi.ecg = ecg.value;
 			ecgi.bpm = bpm;
@@ -909,30 +987,37 @@ static void task_process(void *pvParameters) {
 
 static void task_clock(void *pvParameters) {
 	//char buffer[10];
-	calendar rtc_initial = {2018, 5, 6, 18, hora, minuto ,1};
+	vTaskDelay(1000);
+	calendar rtc_initial = {2018, 3, 19, 12, hora, minuto ,1};
 	RTC_init(RTC, ID_RTC, rtc_initial, RTC_IER_ALREN | RTC_IER_SECEN);
 	uint32_t hour;
 	uint32_t minute;
 	uint32_t second;
+	//UNUSED(pvParameters);
 	
-	rtc_get_time(RTC, &hour, &minute, &second);
 	
 	while(1){
-		//printf("uhuulllll");
+		printf("uhuulllll");
 		if( xSemaphoreTake(xSemaphore, ( TickType_t ) 10 / portTICK_PERIOD_MS) == pdTRUE ){
-			
+			rtc_get_time(RTC, &hour, &minute, &second);
 		
 			if(flag_dot==1){
-				rtc_get_time(RTC, &hour, &minute, &second);
+			
 				lv_label_set_text_fmt(labelTempo, "%02d # # %02d",hour,minute);
+				//lv_label_set_text(labelTempo, "oii");
+				flag_dot=0;
 			}else{
-				rtc_get_time(RTC, &hour, &minute, &second);
+				
 				lv_label_set_text_fmt(labelTempo, "%02d : %02d",hour,minute);
+				//lv_label_set_text(labelTempo, "tchau");
+				flag_dot=1;
 			}
-			flag_dot=!flag_dot;
+			//flag_dot=!flag_dot;
 			
 		}
+		vTaskDelay(10);
 	}
+	
 }
 /************************************************************************/
 /* configs                                                              */
@@ -1027,9 +1112,13 @@ int main(void) {
 	/*Register the driver in LVGL and save the created input device object*/
 	lv_indev_t * my_indev = lv_indev_drv_register(&indev_drv);
 	
+	
 	xQueueOx = xQueueCreate(32, sizeof(char));
 	xQueueEcgInfo = xQueueCreate(32, sizeof(ecgInfo));
 	xSemaphore = xSemaphoreCreateBinary();
+	
+	calendar rtc_initial = {2018, 3, 19, 12, 15, 10 ,1};
+	RTC_init(RTC, ID_RTC, rtc_initial, RTC_IER_ALREN | RTC_IER_SECEN);
 
 	if (xTaskCreate(task_lcd, "LCD", TASK_LCD_STACK_SIZE, NULL, TASK_LCD_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create lcd task\r\n");
