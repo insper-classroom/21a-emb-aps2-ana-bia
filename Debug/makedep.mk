@@ -18,6 +18,8 @@ src\dseg50.c
 
 src\dseg70.c
 
+src\font.c
+
 src\Image.c
 
 src\miniLogo.c

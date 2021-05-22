@@ -856,6 +856,9 @@
     <Compile Include="src\dseg70.c">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="src\font.c">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="src\Image.c">
       <SubType>compile</SubType>
     </Compile>

@@ -19,6 +19,8 @@
 LV_FONT_DECLARE(dseg30);
 LV_FONT_DECLARE(dseg50);
 LV_FONT_DECLARE(dseg70);
+LV_FONT_DECLARE(font);
+
 
 /** Display background color when clearing the display */
 #define BG_COLOR  ILI9341_COLOR(255, 255, 255)
@@ -42,6 +44,7 @@ static  lv_obj_t * labelStart;
 static  lv_obj_t * labelPower;
 static lv_obj_t * spinbox;
 static lv_obj_t * spinbox2;
+static lv_obj_t * spinbox3;
 static lv_obj_t * labelBat;
 static lv_obj_t * labelTempo;
 static lv_obj_t * labelOx;
@@ -56,10 +59,14 @@ static lv_obj_t * labelSalvar;
 static lv_obj_t * mbox1;
 static lv_obj_t *mbox, *info;
 static lv_style_t style_modal;
+static lv_obj_t * labelOximetro;
+static lv_obj_t * labelSimplificado;
+static lv_obj_t * labelVoltar;
 
 static lv_obj_t * btnStart;
 static lv_obj_t * btn;
 static lv_obj_t * btn2;
+static lv_obj_t * btn3;
 static lv_obj_t * img1;
 static lv_obj_t * label1;
 static lv_obj_t * label2;
@@ -83,8 +90,9 @@ volatile int inicio=1;
 
 volatile int flag_begin=0;
 
-volatile int hora;
-volatile int minuto;
+volatile int hora=25;
+volatile int minuto=60;
+volatile int alarme;
 
 
 static void mbox_event_cb(lv_obj_t *obj, lv_event_t evt);
@@ -95,6 +103,7 @@ static void opa_anim(void * bg, lv_anim_value_t v);
 void lv_principal(void);
 void lv_screen_chart(void);
 void lv_valorSalvo(void);
+void lv_simplificado(void);
 
 typedef struct  {
 	uint32_t year;
@@ -269,17 +278,13 @@ void RTT_Handler(void)
 	/* IRQ due to Time has changed */
 	if ((ul_status & RTT_SR_RTTINC) == RTT_SR_RTTINC) {
 		g_dT++;
-		//f_rtt_alarme = false;
-		
-		//	pin_toggle(LED2_PIO, LED2_IDX_MASK);    // BLINK Led
+	
 		
 	}
 
 	/* IRQ due to Alarm */
 	if ((ul_status & RTT_SR_ALMS) == RTT_SR_ALMS) {
 		
-		// pin_toggle(LED_PIO, LED_IDX_MASK);    // BLINK Led
-		//	f_rtt_alarme = true;                  // flag RTT alarme
 	}
 }
 
@@ -375,7 +380,7 @@ static void event_handler(lv_obj_t * obj, lv_event_t event) {
 		printf("Clicked\n");
 		hora= lv_spinbox_get_value(spinbox);
 		minuto=  lv_spinbox_get_value(spinbox2);
-	
+		alarme= lv_spinbox_get_value(spinbox3);
 		
 		printf("HORA %d", hora);
 		printf("MINUTO %d", minuto);
@@ -434,6 +439,32 @@ static void event_handlerSalvar(lv_obj_t * obj, lv_event_t event) {
 	}
 }
 
+static void event_handlerSimplificado(lv_obj_t * obj, lv_event_t event) {
+	if(event == LV_EVENT_CLICKED) {
+		printf("Clicked\n");
+		lv_simplificado();
+		
+	}
+	else if(event == LV_EVENT_VALUE_CHANGED) {
+		printf("Toggled\n");
+		
+	}
+}
+
+static void event_handlerVoltar(lv_obj_t * obj, lv_event_t event) {
+	if(event == LV_EVENT_CLICKED) {
+		printf("Clicked\n");
+		lv_principal();
+		lv_screen_chart();
+		lv_valorSalvo();
+		
+	}
+	else if(event == LV_EVENT_VALUE_CHANGED) {
+		printf("Toggled\n");
+		
+	}
+}
+
 static void lv_spinbox_increment_event_cb(lv_obj_t * btn, lv_event_t e)
 {
 	if(e == LV_EVENT_SHORT_CLICKED || e == LV_EVENT_LONG_PRESSED_REPEAT) {
@@ -462,6 +493,21 @@ static void lv_spinbox_decrement_event_cb2(lv_obj_t * btn, lv_event_t e)
 	}
 }
 
+
+static void lv_spinbox_increment_event_cb3(lv_obj_t * btn, lv_event_t e)
+{
+	if(e == LV_EVENT_SHORT_CLICKED || e == LV_EVENT_LONG_PRESSED_REPEAT) {
+		lv_spinbox_increment(spinbox3);
+	}
+}
+
+static void lv_spinbox_decrement_event_cb3(lv_obj_t * btn, lv_event_t e)
+{
+	if(e == LV_EVENT_SHORT_CLICKED || e == LV_EVENT_LONG_PRESSED_REPEAT) {
+		lv_spinbox_decrement(spinbox3);
+	}
+}
+
 static void btn_event_cb(lv_obj_t *btn, lv_event_t evt)
 {
 	if(evt == LV_EVENT_CLICKED) {
@@ -472,9 +518,7 @@ static void btn_event_cb(lv_obj_t *btn, lv_event_t evt)
 		lv_obj_reset_style_list(obj, LV_OBJ_PART_MAIN);
 		lv_obj_add_style(obj, LV_OBJ_PART_MAIN, &style_modal);
 		lv_obj_set_pos(obj, 0, 0);
-		//lv_obj_align(obj, NULL, LV_ALIGN_CENTER, 0, 0);
 		lv_obj_set_size(obj, LV_HOR_RES, LV_VER_RES);
-		//lv_obj_set_height(obj, 200);
 		
 		
 
@@ -539,7 +583,6 @@ const int g_ecgSize =  sizeof(ecg)/sizeof(ecg[0]);
 void lv_inicio(void){
 	
 	
-	
 	lv_obj_t * page2 = lv_page_create(lv_scr_act(), NULL);
 	lv_obj_set_size(page2, 320, 240);
 	lv_obj_align(page2, NULL, LV_ALIGN_CENTER, 0, 0);
@@ -551,7 +594,7 @@ void lv_inicio(void){
 
 	img1 = lv_img_create(lv_scr_act(), NULL);
 	lv_img_set_src(img1, &Image);
-	lv_obj_align(img1, NULL, LV_ALIGN_CENTER, 0, -80);
+	lv_obj_align(img1, NULL, LV_ALIGN_CENTER, 0, -85);
 	
 	//-------------------
 	// INICIAR
@@ -564,12 +607,7 @@ void lv_inicio(void){
 	lv_obj_set_height(btnStart, 30);
 
 	// alinha no canto esquerdo e desloca um pouco para cima e para direita
-	lv_obj_align(btnStart, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, -27);
-
-	// altera a cor de fundo, borda do botão criado para PRETO
-	lv_obj_set_style_local_bg_color(btnStart, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_ROZINHA);
-	lv_obj_set_style_local_border_color(btnStart, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT,  LV_COLOR_ROZINHA);
-	lv_obj_set_style_local_border_width(btnStart, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, 0);
+	lv_obj_align(btnStart, NULL, LV_ALIGN_IN_BOTTOM_MID, 0, -17);
 	
 	labelStart = lv_label_create(btnStart, NULL);
 	lv_label_set_recolor(labelStart, true);
@@ -584,7 +622,7 @@ void lv_inicio(void){
 	lv_spinbox_set_digit_format(spinbox, 2, 2);
 	lv_spinbox_step_prev(spinbox);
 	lv_obj_set_width(spinbox, 40);
-	lv_obj_align(spinbox, NULL, LV_ALIGN_CENTER, -70, 0);
+	lv_obj_align(spinbox, NULL, LV_ALIGN_CENTER, -70, -17);
 
 	lv_coord_t h = lv_obj_get_height(spinbox);
 	lv_obj_t * btn = lv_btn_create(lv_scr_act(), NULL);
@@ -608,7 +646,7 @@ void lv_inicio(void){
 	lv_spinbox_set_digit_format(spinbox2, 2, 2);
 	lv_spinbox_step_prev(spinbox2);
 	lv_obj_set_width(spinbox2, 40);
-	lv_obj_align(spinbox2, NULL, LV_ALIGN_CENTER,70, 0);
+	lv_obj_align(spinbox2, NULL, LV_ALIGN_CENTER,70, -17);
 
 	lv_coord_t h2 = lv_obj_get_height(spinbox2);
 	lv_obj_t * btn2 = lv_btn_create(lv_scr_act(), NULL);
@@ -630,7 +668,7 @@ void lv_inicio(void){
 	label1 = lv_label_create(lv_scr_act(), NULL);
 	lv_label_set_long_mode(label1, LV_LABEL_LONG_BREAK);
 	lv_label_set_recolor(label1, true);
-	lv_obj_align(label1, NULL, LV_ALIGN_CENTER, -76, -35);
+	lv_obj_align(label1, NULL, LV_ALIGN_CENTER, -76, -45);
 	lv_label_set_text(label1, "#000000 HORA");
 	lv_obj_set_width(label1, 150);
 	
@@ -642,9 +680,44 @@ void lv_inicio(void){
 	label2 = lv_label_create(lv_scr_act(), NULL);
 	lv_label_set_long_mode(label2, LV_LABEL_LONG_BREAK);
 	lv_label_set_recolor(label2, true);
-	lv_obj_align(label2, NULL, LV_ALIGN_CENTER, 55, -35);
+	lv_obj_align(label2, NULL, LV_ALIGN_CENTER, 55, -45);
 	lv_label_set_text(label2, "#000000 MINUTO");
 	lv_obj_set_width(label2, 150);
+	
+	//-------------------
+	// SPINBOX ALARME
+	//-------------------
+	
+	spinbox3 = lv_spinbox_create(lv_scr_act(), NULL);
+	lv_spinbox_set_range(spinbox3, 80, 100);
+	lv_spinbox_set_digit_format(spinbox3, 3, 3);
+	lv_spinbox_step_prev(spinbox3);
+	lv_obj_set_width(spinbox3, 45);
+	lv_obj_align(spinbox3, NULL, LV_ALIGN_CENTER, 0, 45);
+
+	lv_coord_t h3 = lv_obj_get_height(spinbox3);
+	lv_obj_t * btn3 = lv_btn_create(lv_scr_act(), NULL);
+	lv_obj_set_size(btn3, h3, h3);
+	lv_obj_align(btn3, spinbox3, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
+	lv_theme_apply(btn3, LV_THEME_SPINBOX_BTN);
+	lv_obj_set_style_local_value_str(btn3, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, LV_SYMBOL_PLUS);
+	lv_obj_set_event_cb(btn3, lv_spinbox_increment_event_cb3);
+
+	btn3 = lv_btn_create(lv_scr_act(), btn3);
+	lv_obj_align(btn3, spinbox3, LV_ALIGN_OUT_LEFT_MID, -5, 0);
+	lv_obj_set_event_cb(btn3, lv_spinbox_decrement_event_cb3);
+	lv_obj_set_style_local_value_str(btn3, LV_BTN_PART_MAIN, LV_STATE_DEFAULT, LV_SYMBOL_MINUS);
+	
+	//-------------------
+	//alarme
+	//-------------------
+	
+	labelOximetro = lv_label_create(lv_scr_act(), NULL);
+	lv_label_set_long_mode(labelOximetro, LV_LABEL_LONG_BREAK);
+	lv_label_set_recolor(labelOximetro, true);
+	lv_obj_align(labelOximetro, NULL, LV_ALIGN_CENTER, -27, 15);
+	lv_label_set_text(labelOximetro, "#000000 ALARME OX");
+	lv_obj_set_width(labelOximetro, 100);
 }
 
 void lv_principal(void){
@@ -669,19 +742,14 @@ void lv_principal(void){
 	// cria botao de tamanho 60x60 redondo
 	lv_obj_t * btnPower = lv_btn_create(lv_scr_act(), NULL);
 	lv_obj_set_event_cb(btnPower, event_handlerDesligar);
-	lv_obj_set_width(btnPower, 40);  lv_obj_set_height(btnPower, 40);
+	lv_obj_set_size(btnPower, 110, 25);
 
 	// alinha no canto esquerdo e desloca um pouco para cima e para direita
-	lv_obj_align(btnPower, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -10, -10);
-
-	// altera a cor de fundo, borda do botão criado para PRETO
-	lv_obj_set_style_local_bg_color(btnPower, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_ROZINHA );
-	lv_obj_set_style_local_border_color(btnPower, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_ROZINHA );
-	lv_obj_set_style_local_border_width(btnPower, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, 0);
+	lv_obj_align(btnPower, NULL, LV_ALIGN_IN_TOP_LEFT, 10, 25);
 	
 	labelPower = lv_label_create(btnPower, NULL);
 	lv_label_set_recolor(labelPower, true);
-	lv_label_set_text(labelPower, "#ffffff  " LV_SYMBOL_POWER " ");
+	lv_label_set_text(labelPower, "Pause / Play ");
 	
 	//-------------------
 	// Bateria
@@ -702,7 +770,7 @@ void lv_principal(void){
 	lv_label_set_long_mode(labelTempo, LV_LABEL_LONG_BREAK);
 	lv_label_set_recolor(labelTempo, true);
 	lv_obj_align(labelTempo, NULL, LV_ALIGN_IN_TOP_MID, 0, 25);
-	lv_label_set_text(labelTempo, "#000000 17:04");
+	lv_label_set_text(labelTempo, "#000000   ");
 	lv_obj_set_width(labelTempo, 150);
 	
 	
@@ -721,8 +789,7 @@ void lv_principal(void){
 	labelOxNum = lv_label_create(lv_scr_act(), NULL);
 	lv_obj_align(labelOxNum, NULL, LV_ALIGN_IN_LEFT_MID, 40 , 42);
 	lv_obj_set_style_local_text_font(labelOxNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, &dseg30);
-	/*lv_obj_set_style_local_text_color(labelOxNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_ROZINHA);*/
-	//lv_label_set_text_fmt(labelOxNum, "97");
+	lv_label_set_text_fmt(labelOxNum, "--");
 	
 	lv_obj_t * labelOxUni = lv_label_create(lv_scr_act(), NULL);
 	lv_label_set_long_mode(labelOxUni, LV_LABEL_LONG_BREAK);
@@ -746,8 +813,7 @@ void lv_principal(void){
 	labelBaNum = lv_label_create(lv_scr_act(), NULL);
 	lv_obj_align(labelBaNum, NULL, LV_ALIGN_IN_LEFT_MID, 40 , -28);
 	lv_obj_set_style_local_text_font(labelBaNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, &dseg30);
-	/*lv_obj_set_style_local_text_color(labelBaNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_GREEN);*/
-	/*lv_label_set_text_fmt(labelBaNum, "170");*/
+	lv_label_set_text_fmt(labelBaNum, "--");
 	
 	lv_obj_t *labelBaUni = lv_label_create(lv_scr_act(), NULL);
 	lv_label_set_long_mode(labelBaUni, LV_LABEL_LONG_BREAK);
@@ -761,16 +827,98 @@ void lv_principal(void){
 	//-------------------
 	
 	lv_obj_t * btnSalvar = lv_btn_create(lv_scr_act(), NULL);
-	lv_obj_set_size(btnSalvar, 70, 25);
+	lv_obj_set_size(btnSalvar, 67, 25);
 	lv_obj_set_event_cb(btnSalvar, event_handlerSalvar);
-	lv_obj_align(btnSalvar, NULL, LV_ALIGN_IN_BOTTOM_LEFT, 140, -10);
+	lv_obj_align(btnSalvar, NULL, LV_ALIGN_IN_BOTTOM_LEFT, 134, -10);
 	
 	/* Create a label on the button */
 	labelSalvar = lv_label_create(btnSalvar, NULL);
 	lv_label_set_text(labelSalvar, "Salvar");
+	
+	//-------------------
+	// botao simplificado
+	//-------------------
+	
+	lv_obj_t * btnSimplificado = lv_btn_create(lv_scr_act(), NULL);
+	lv_obj_set_size(btnSimplificado, 105, 25);
+	lv_obj_set_event_cb(btnSimplificado, event_handlerSimplificado);
+	lv_obj_align(btnSimplificado, NULL, LV_ALIGN_IN_BOTTOM_RIGHT, -10, -10);
+	
+	/* Create a label on the button */
+	labelSimplificado = lv_label_create(btnSimplificado, NULL);
+	lv_label_set_text(labelSimplificado, "Simplificado");
 }
 
-
+void lv_simplificado(void){
+	
+	lv_obj_t * page3 = lv_page_create(lv_scr_act(), NULL);
+	lv_obj_set_size(page3, 320, 240);
+	lv_obj_align(page3, NULL, LV_ALIGN_CENTER, 0, 0);
+	lv_obj_set_style_local_bg_color(lv_scr_act(), LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_WHITE);
+	
+	
+	//-------------------
+	//Oxigenio
+	//-------------------
+	
+	labelOx = lv_label_create(lv_scr_act(), NULL);
+	lv_label_set_long_mode(labelOx, LV_LABEL_LONG_BREAK);
+	lv_label_set_recolor(labelOx, true);
+	lv_obj_align(labelOx, NULL, LV_ALIGN_IN_LEFT_MID, 170, -25);
+	lv_label_set_text(labelOx, "#000000 OXIGENIO");
+	lv_obj_set_width(labelOx, 150);
+	
+	
+	labelOxNum = lv_label_create(lv_scr_act(), NULL);
+	lv_obj_align(labelOxNum, NULL, LV_ALIGN_CENTER, 20 , 0);
+	lv_obj_set_style_local_text_font(labelOxNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, &dseg50);
+	lv_label_set_text_fmt(labelOxNum, "--");
+	
+	labelOxUni = lv_label_create(lv_scr_act(), NULL);
+	lv_label_set_long_mode(labelOxUni, LV_LABEL_LONG_BREAK);
+	lv_label_set_recolor(labelOxUni, true);
+	lv_obj_align(labelOxUni, NULL, LV_ALIGN_IN_LEFT_MID, 250, 38);
+	lv_label_set_text(labelOxUni, "#000000 SpO2%");
+	lv_obj_set_width(labelOxUni, 150);
+	
+	//-------------------
+	// Batimentos
+	//-------------------
+	
+	lv_obj_t * labelBa = lv_label_create(lv_scr_act(), NULL);
+	lv_label_set_long_mode(labelBa, LV_LABEL_LONG_BREAK);
+	lv_label_set_recolor(labelBa, true);
+	lv_obj_align(labelBa, NULL, LV_ALIGN_IN_LEFT_MID, 30, -25);
+	lv_label_set_text(labelBa, "#000000 BATIMENTOS");
+	lv_obj_set_width(labelBa, 150);
+	
+	
+	labelBaNum = lv_label_create(lv_scr_act(), NULL);
+	lv_obj_align(labelBaNum, NULL, LV_ALIGN_CENTER, -120 , 0);
+	lv_obj_set_style_local_text_font(labelBaNum, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, &dseg50);
+	lv_label_set_text_fmt(labelBaNum, "--");
+	
+	labelBaUni = lv_label_create(lv_scr_act(), NULL);
+	lv_label_set_long_mode(labelBaUni, LV_LABEL_LONG_BREAK);
+	lv_label_set_recolor(labelBaUni, true);
+	lv_obj_align(labelBaUni, NULL, LV_ALIGN_IN_LEFT_MID, 110, 38);
+	lv_label_set_text_fmt(labelBaUni, "#000000 BPM");
+	lv_obj_set_width(labelBaUni, 150);
+	
+	//-------------------
+	// botao voltar
+	//-------------------
+	
+	lv_obj_t * btnVoltar = lv_btn_create(lv_scr_act(), NULL);
+	lv_obj_set_size(btnVoltar, 105, 25);
+	lv_obj_set_event_cb(btnVoltar, event_handlerVoltar);
+	lv_obj_align(btnVoltar, NULL, LV_ALIGN_IN_TOP_LEFT, 10, 10);
+	
+	/* Create a label on the button */
+	labelVoltar = lv_label_create(btnVoltar, NULL);
+	lv_label_set_text(labelVoltar, "Voltar");
+	
+}
 
 void lv_screen_chart(void) {
 	chart = lv_chart_create(lv_scr_act(), NULL);
@@ -795,10 +943,7 @@ void lv_screen_chart(void) {
 	lv_obj_align(labelFloor, NULL, LV_ALIGN_IN_TOP_LEFT, -5 , 0);
 	lv_obj_set_style_local_text_font(labelFloor, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, &dseg70);
 	lv_obj_set_style_local_text_color(labelFloor, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_GREEN);
-	//
-	// 	labelBPM = lv_label_create(lv_scr_act(), NULL);
-	// 	lv_obj_align(labelBPM, NULL, LV_ALIGN_IN_TOP_MID, 0 , 0);
-	// 	lv_obj_set_style_local_text_color(labelBPM, LV_OBJ_PART_MAIN, LV_STATE_DEFAULT, LV_COLOR_BLACK);
+
 }
 
 
@@ -808,7 +953,7 @@ void lv_alarme(void)
 	static const char * btns[] ={"OK", ""};
 
 	mbox1 = lv_msgbox_create(lv_scr_act(), NULL);
-	lv_msgbox_set_text(mbox1, "Cuidado! Sua oxigenacao esta abaixo de 90.");
+	lv_msgbox_set_text_fmt(mbox1, "Cuidado! Sua oxigenacao esta abaixo de %d.",alarme);
 	lv_msgbox_add_btns(mbox1, btns);
 	lv_obj_set_width(mbox1, 200);
 	lv_obj_set_event_cb(mbox1, event_handler_alarm);
@@ -846,23 +991,12 @@ static void task_lcd(void *pvParameters) {
 	LV_IMG_DECLARE(miniLogo);
 	lv_principal();
 	lv_inicio();
-	//clicou=0;
-	
-//  	lv_principal();
-//  	lv_screen_chart();
-//  	lv_valorSalvo();
-	
+
 	for (;;)  {
 		lv_tick_inc(50);
 		lv_task_handler();
 		vTaskDelay(50);
-// 		
-//  		if(clicou){
-// 			lv_principal();
-//  			lv_screen_chart();
-//  			lv_valorSalvo();
-//  			clicou=0;
-//  		}
+
 	}
 }
 
@@ -895,7 +1029,7 @@ static void task_main(void *pvParameters) {
 				
 				lv_label_set_text_fmt(labelOxNum, "%d", oxi);
 				
-				if(oxi<90){
+				if(oxi<alarme){
 					
 					if(entrou==0){
 						lv_alarme();
@@ -907,7 +1041,6 @@ static void task_main(void *pvParameters) {
 			}
 			
 			if (xQueueReceive( xQueueEcgInfo, &(ecg), ( TickType_t )  100 / portTICK_PERIOD_MS)) {
-				//printf(" %d\n", ecg.bpm);
 				
 				if(ecg.bpm > 0) {
 					
@@ -968,7 +1101,6 @@ static void task_process(void *pvParameters) {
 			}
 			
 			if(ecg.value > 3280 && !flag_pico){
-				//printf("%d: %d ms\n", ecg.value, g_dT);
 				double valor_bpm = 60000/g_dT;
 				bpm = (int)valor_bpm;
 				printf("bpm: %d\n", bpm);
@@ -988,25 +1120,27 @@ static void task_process(void *pvParameters) {
 static void task_clock(void *pvParameters) {
 	//char buffer[10];
 	vTaskDelay(1000);
+	while(hora==25 && minuto==60){
+	}
 	calendar rtc_initial = {2018, 3, 19, 12, hora, minuto ,1};
 	RTC_init(RTC, ID_RTC, rtc_initial, RTC_IER_ALREN | RTC_IER_SECEN);
 	uint32_t hour;
 	uint32_t minute;
 	uint32_t second;
-	//UNUSED(pvParameters);
+	UNUSED(pvParameters);
 	
 	
 	while(1){
 		printf("uhuulllll");
 		if( xSemaphoreTake(xSemaphore, ( TickType_t ) 10 / portTICK_PERIOD_MS) == pdTRUE ){
 			rtc_get_time(RTC, &hour, &minute, &second);
-		
-			if(flag_dot==1){
 			
+			if(flag_dot==1){
+				
 				lv_label_set_text_fmt(labelTempo, "%02d # # %02d",hour,minute);
 				//lv_label_set_text(labelTempo, "oii");
 				flag_dot=0;
-			}else{
+				}else{
 				
 				lv_label_set_text_fmt(labelTempo, "%02d : %02d",hour,minute);
 				//lv_label_set_text(labelTempo, "tchau");
